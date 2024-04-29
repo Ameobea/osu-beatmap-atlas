@@ -1,0 +1,10 @@
+set dotenv-load := true
+
+run:
+  yarn dev --port 7277
+
+build:
+  yarn build
+
+deploy:
+  phost update osu-map patch build
