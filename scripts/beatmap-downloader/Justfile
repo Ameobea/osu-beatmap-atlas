@@ -1,0 +1,4 @@
+set dotenv-load := true
+
+code:
+  code .
