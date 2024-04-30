@@ -2,7 +2,8 @@
   import { browser } from '$app/environment';
   import { GlobalCorpus } from '../corpus';
   import { UnreachableError } from '../util';
-  import { AtlasViz } from '../viz/AtlasViz';
+  // import { AtlasViz } from '../viz/AtlasViz';
+  import { AtlasVizRegl } from '../viz/AtlasVizRegl';
 
   let windowWidth = 0;
   let windowHeight = 0;
@@ -13,7 +14,8 @@
       throw new UnreachableError();
     }
 
-    const viz = new AtlasViz(canvas, $GlobalCorpus.data);
+    // const viz = new AtlasViz(canvas, $GlobalCorpus.data);
+    const viz = new AtlasVizRegl(canvas, $GlobalCorpus.data);
   };
 </script>
 
