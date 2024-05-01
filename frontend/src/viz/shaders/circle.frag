@@ -3,6 +3,7 @@ precision mediump float;
 varying vec4 vColor;
 varying float vBorderWidth;
 varying float vBorderFade;
+varying float vCenterAlpha;
 
 void main() {
     float r = length(gl_PointCoord - vec2(0.5));
@@ -18,7 +19,7 @@ void main() {
     }
 
     // inner part of the circle has reduced opacity
-    alpha *= smoothstep(borderInner - vBorderFade, borderInner, r) * 0.65 + 0.35;
+    alpha *= mix(vCenterAlpha, 1.0, smoothstep(borderInner - vBorderFade, borderInner, r));
 
     gl_FragColor = vec4(vColor.rgb, alpha * vColor.a);
 }

@@ -19,6 +19,7 @@ interface BeatmapData {
   OD: number;
   aimDifficulty: number;
   speedDifficulty: number;
+  numUsers: number;
 }
 
 export type Corpus = BeatmapData[];
@@ -54,8 +55,9 @@ const parseCorpus = (buffer: ArrayBuffer): BeatmapData[] => {
     const OD = dataView.getFloat32(rowDataOffset + 44, true);
     const aimDifficulty = dataView.getFloat32(rowDataOffset + 48, true);
     const speedDifficulty = dataView.getFloat32(rowDataOffset + 52, true);
+    const numUsers = dataView.getUint16(rowDataOffset + 56, true);
 
-    rowDataOffset += 56;
+    rowDataOffset += 58;
 
     const beatmapName = textDecoder.decode(new Uint8Array(buffer, stringOffset, beatmapNameLength));
     stringOffset += beatmapNameLength;
@@ -81,6 +83,7 @@ const parseCorpus = (buffer: ArrayBuffer): BeatmapData[] => {
       OD,
       aimDifficulty,
       speedDifficulty,
+      numUsers,
     });
   }
 

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { onDestroy } from 'svelte';
   import { GlobalCorpus } from '../corpus';
   import { AtlasVizRegl } from '../viz/AtlasVizRegl';
 
@@ -7,9 +8,23 @@
   let windowHeight = 0;
   const dpr = browser ? window.devicePixelRatio || 1 : 1;
 
+  let viz: AtlasVizRegl | null = null;
   const renderViz = (canvas: HTMLCanvasElement) => {
-    const viz = new AtlasVizRegl(canvas);
+    if (viz) {
+      viz.destroy();
+    }
+    viz = new AtlasVizRegl(canvas);
+    if ((window as any).lastTransformationMatrix) {
+      viz.transformMatrix = (window as any).lastTransformationMatrix;
+    }
   };
+
+  onDestroy(() => {
+    if (viz) {
+      (window as any).lastTransformationMatrix = viz.transformMatrix;
+      viz.destroy();
+    }
+  });
 </script>
 
 <svelte:window bind:innerWidth={windowWidth} bind:innerHeight={windowHeight} />

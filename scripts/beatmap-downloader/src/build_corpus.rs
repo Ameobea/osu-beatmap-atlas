@@ -23,6 +23,7 @@
 //! [f32] OD
 //! [f32] aim difficulty
 //! [f32] speed difficulty
+//! [u16] user count
 //!
 //! The string region starts at (row_size_bytes) * (number_of_rows) + 4 bytes from the start of the
 //! file. Each string is _not_ null-terminated and is stored as a sequence of UTF-8 bytes end to
@@ -39,7 +40,6 @@ use parquet::{
   record::RowAccessor,
 };
 use rosu_v2::model::GameMods;
-use serde::Deserialize;
 
 use crate::{DifficultyRecord, ScoreMetadata};
 
@@ -227,6 +227,7 @@ pub(crate) async fn build_corpus(score_metadata: Vec<ScoreMetadata>) -> Vec<u8> 
     corpus_buffer.extend_from_slice(&(beatmap_metadata.diff_overall as f32).to_le_bytes());
     corpus_buffer.extend_from_slice(&(difficulties.difficulty_aim as f32).to_le_bytes());
     corpus_buffer.extend_from_slice(&(difficulties.difficulty_speed as f32).to_le_bytes());
+    corpus_buffer.extend_from_slice(&(score_metadata.num_users as u16).to_le_bytes());
 
     strings_buffer.push_str(&beatmap_metadata.title);
     strings_buffer.push_str(&beatmap_metadata.version);
