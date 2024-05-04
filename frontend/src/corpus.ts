@@ -1,8 +1,10 @@
 import { get, writable } from 'svelte/store';
+import { parseModsBitmask } from './modParser';
 import { logError } from './sentry';
 import { delay } from './util';
 
 interface BeatmapData {
+  scoreID: string;
   beatmapId: number;
   modsBitmask: number;
   position: [number, number];
@@ -40,8 +42,8 @@ const parseCorpus = (buffer: ArrayBuffer): BeatmapData[] => {
   for (let i = 0; i < numItems; i++) {
     const beatmapId = dataView.getInt32(rowDataOffset, true);
     const modsBitmask = dataView.getUint32(rowDataOffset + 4, true);
-    const x = dataView.getFloat32(rowDataOffset + 8, true);
-    const y = dataView.getFloat32(rowDataOffset + 12, true);
+    const x = 2 * dataView.getFloat32(rowDataOffset + 8, true);
+    const y = 2 * -dataView.getFloat32(rowDataOffset + 12, true);
     const averagePp = dataView.getFloat32(rowDataOffset + 16, true);
     const starRating = dataView.getFloat32(rowDataOffset + 20, true);
     const beatmapNameLength = dataView.getUint16(rowDataOffset + 24, true);
@@ -67,6 +69,7 @@ const parseCorpus = (buffer: ArrayBuffer): BeatmapData[] => {
     stringOffset += mapperNameLength;
 
     beatmaps.push({
+      scoreID: `${beatmapId}_${parseModsBitmask(modsBitmask)}`,
       beatmapId,
       modsBitmask,
       position: [x, y],

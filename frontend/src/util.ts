@@ -5,3 +5,5 @@ export class UnreachableError extends Error {
     super(`entered unreachable code: ${message}`);
   }
 }
+
+export const clamp = (x: number, min: number, max: number) => Math.min(Math.max(x, min), max);
