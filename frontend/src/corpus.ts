@@ -1,4 +1,5 @@
 import { get, writable } from 'svelte/store';
+import { fetchCorpus } from './api';
 import { parseModsBitmask } from './modParser';
 import { logError } from './sentry';
 import { delay } from './util';
@@ -6,7 +7,9 @@ import { delay } from './util';
 interface BeatmapData {
   scoreID: string;
   beatmapId: number;
+  beatmapSetID: number;
   modsBitmask: number;
+  modString: string;
   position: [number, number];
   averagePp: number;
   starRating: number;
@@ -34,7 +37,7 @@ const parseCorpus = (buffer: ArrayBuffer): BeatmapData[] => {
   let rowDataOffset = 4;
 
   const beatmaps: BeatmapData[] = [];
-  const stringStartOffset = numItems * 56 + 4;
+  const stringStartOffset = numItems * 62 + 4;
   let stringOffset = stringStartOffset;
 
   const textDecoder = new TextDecoder();
@@ -57,9 +60,10 @@ const parseCorpus = (buffer: ArrayBuffer): BeatmapData[] => {
     const OD = dataView.getFloat32(rowDataOffset + 44, true);
     const aimDifficulty = dataView.getFloat32(rowDataOffset + 48, true);
     const speedDifficulty = dataView.getFloat32(rowDataOffset + 52, true);
-    const numUsers = dataView.getUint16(rowDataOffset + 56, true);
+    const beatmapSetID = dataView.getUint32(rowDataOffset + 56, true);
+    const numUsers = dataView.getUint16(rowDataOffset + 60, true);
 
-    rowDataOffset += 58;
+    rowDataOffset += 62;
 
     const beatmapName = textDecoder.decode(new Uint8Array(buffer, stringOffset, beatmapNameLength));
     stringOffset += beatmapNameLength;
@@ -68,10 +72,14 @@ const parseCorpus = (buffer: ArrayBuffer): BeatmapData[] => {
     const mapperName = textDecoder.decode(new Uint8Array(buffer, stringOffset, mapperNameLength));
     stringOffset += mapperNameLength;
 
+    const modString = parseModsBitmask(modsBitmask);
+
     beatmaps.push({
-      scoreID: `${beatmapId}_${parseModsBitmask(modsBitmask)}`,
+      scoreID: `${beatmapId}_${modString}`,
       beatmapId,
+      beatmapSetID,
       modsBitmask,
+      modString,
       position: [x, y],
       averagePp,
       starRating,
@@ -101,7 +109,7 @@ type FetchedCorpus =
 
 export const GlobalCorpus = writable<FetchedCorpus>({ status: 'notFetched' });
 
-export const loadCorpus = async (url: string) => {
+export const loadCorpus = async () => {
   if (get(GlobalCorpus).status !== 'notFetched') {
     return;
   }
@@ -110,8 +118,7 @@ export const loadCorpus = async (url: string) => {
 
   for (;;) {
     try {
-      const response = await fetch(url);
-      const buffer = await response.arrayBuffer();
+      const buffer = await fetchCorpus();
       const corpus = parseCorpus(buffer);
       GlobalCorpus.set({ status: 'loaded', data: corpus });
       return;

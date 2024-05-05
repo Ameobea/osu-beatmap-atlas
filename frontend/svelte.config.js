@@ -10,7 +10,7 @@ const config = {
     vitePreprocess(),
     // \/ Won't work until this is fixed:
     // https://github.com/carbon-design-system/carbon-preprocess-svelte/issues/61
-    // optimizeImports()
+    optimizeImports(),
   ],
 
   kit: {

@@ -7,7 +7,7 @@
 
   onMount(() => {
     if (browser) {
-      loadCorpus('/corpus');
+      loadCorpus();
     }
   });
 </script>

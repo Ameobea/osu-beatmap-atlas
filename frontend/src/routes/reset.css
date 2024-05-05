@@ -17,6 +17,7 @@ html {
 html,
 body {
   overflow: hidden;
+  touch-action: none;
 }
 
 /* Remove default margin in favour of better control in authored CSS */

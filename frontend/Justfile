@@ -8,3 +8,7 @@ build:
 
 deploy:
   phost update osu-map patch build
+
+build-and-deploy:
+  just build
+  just deploy

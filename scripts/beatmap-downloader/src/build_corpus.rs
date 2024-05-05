@@ -23,6 +23,7 @@
 //! [f32] OD
 //! [f32] aim difficulty
 //! [f32] speed difficulty
+//! [u32] beatmapset id
 //! [u16] user count
 //!
 //! The string region starts at (row_size_bytes) * (number_of_rows) + 4 bytes from the start of the
@@ -227,6 +228,7 @@ pub(crate) async fn build_corpus(score_metadata: Vec<ScoreMetadata>) -> Vec<u8> 
     corpus_buffer.extend_from_slice(&(beatmap_metadata.diff_overall as f32).to_le_bytes());
     corpus_buffer.extend_from_slice(&(difficulties.difficulty_aim as f32).to_le_bytes());
     corpus_buffer.extend_from_slice(&(difficulties.difficulty_speed as f32).to_le_bytes());
+    corpus_buffer.extend_from_slice(&(beatmap_metadata.beatmapset_id as u32).to_le_bytes());
     corpus_buffer.extend_from_slice(&(score_metadata.num_users as u16).to_le_bytes());
 
     strings_buffer.push_str(&beatmap_metadata.title);

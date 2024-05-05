@@ -1,10 +1,10 @@
 import { glMatrix, mat3, vec2 } from 'gl-matrix';
 import REGL from 'regl';
 
-import { get } from 'svelte/store';
+import { get, type Writable } from 'svelte/store';
 import { getHiscoreIDsForUser } from '../api';
 import { GlobalCorpus, type Corpus } from '../corpus';
-import { clamp } from '../util';
+import { clamp, UnreachableError } from '../util';
 import { turboColormap } from './colormap';
 import circleFragShader from './shaders/circle.frag';
 import circleVertShader from './shaders/circle.vert';
@@ -36,10 +36,10 @@ export class AtlasVizRegl {
   private props: Props;
   private regl: REGL.Regl;
   private inputCbs!: {
-    pointerDown: (e: MouseEvent) => void;
-    pointerUp: (e: MouseEvent) => void;
-    mouseMove: (e: MouseEvent) => void;
-    wheel: (e: WheelEvent) => void;
+    pointerDown: (evt: PointerEvent) => void;
+    pointerUp: (evt: PointerEvent) => void;
+    pointerMove: (evt: PointerEvent) => void;
+    wheel: (evt: WheelEvent) => void;
     windowResize: () => void;
   };
   private cancelGlobalCorpusSubscription: () => void;
@@ -48,14 +48,16 @@ export class AtlasVizRegl {
   private canvasWidth = 1;
   private canvasHeight = 1;
   private corpus: Corpus | undefined;
+  cachedCorpusPositions: number[] = [];
   private curRadii: number[] = [];
   public transformMatrix: mat3;
   private highlightedScoreIDs: Set<string> | null = null;
   private hoveredScoreIx: number | null = null;
-  private selectedScoreIx: number | null = null;
+  public selectedScoreIx: Writable<number | null>;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, selectedScoreIx: Writable<number | null>, initialTransformMatrix?: mat3) {
     this.canvas = canvas;
+    this.selectedScoreIx = selectedScoreIx;
     this.canvasWidth = canvas.clientWidth;
     this.canvasHeight = canvas.clientHeight;
 
@@ -76,16 +78,18 @@ export class AtlasVizRegl {
     // Set up initial transform matrix for the world coordinates to viewport coordinates from [-1, -1] (botton left) to [1, 1] (top right)
     //
     // The initial view spans from -5 to 5 in X with Y scaled to maintain aspect ratio.
-    this.transformMatrix = (() => {
-      const aspectRatio = canvas.clientWidth / canvas.clientHeight;
-      const initialSpanX = 10;
-      const initialSpanY = initialSpanX / aspectRatio;
-      const initialCenter = [0, 0];
-      const transformMatrix = mat3.create();
-      mat3.fromScaling(transformMatrix, [2 / initialSpanX, 2 / initialSpanY]);
-      mat3.translate(transformMatrix, transformMatrix, [-initialCenter[0], -initialCenter[1]]);
-      return transformMatrix;
-    })();
+    this.transformMatrix =
+      initialTransformMatrix ??
+      (() => {
+        const aspectRatio = canvas.clientWidth / canvas.clientHeight;
+        const initialSpanX = 81.6;
+        const initialSpanY = initialSpanX / aspectRatio;
+        const initialCenter = [14.4, -8];
+        const transformMatrix = mat3.create();
+        mat3.fromScaling(transformMatrix, [2 / initialSpanX, 2 / initialSpanY]);
+        mat3.translate(transformMatrix, transformMatrix, [-initialCenter[0], -initialCenter[1]]);
+        return transformMatrix;
+      })();
 
     this.setupInputHandlers();
 
@@ -107,10 +111,11 @@ export class AtlasVizRegl {
           return this.corpus[this.hoveredScoreIx].position;
         },
         selectedCirclePosition: () => {
-          if (!this.corpus || this.selectedScoreIx === null) {
+          const selectedScoreIx = get(this.selectedScoreIx);
+          if (!this.corpus || selectedScoreIx === null) {
             return [-1000, -1000];
           }
-          return this.corpus[this.selectedScoreIx].position;
+          return this.corpus[selectedScoreIx].position;
         },
       },
       count: regl.prop<Props, 'count'>('count'),
@@ -142,31 +147,59 @@ export class AtlasVizRegl {
 
     this.regl = regl;
 
-    this.updateData();
-
     this.cancelGlobalCorpusSubscription = GlobalCorpus.subscribe(() => this.updateData());
 
-    getHiscoreIDsForUser(4093752).then((scoreIDs) => {
+    const lastUserHiscoreIDs = localStorage.getItem('lastUserHiscoreIDs');
+    if (lastUserHiscoreIDs) {
+      this.highlightedScoreIDs = new Set(JSON.parse(lastUserHiscoreIDs));
+    }
+    this.updateData();
+
+    const initialActiveUsername = localStorage.getItem('activeUsername');
+    if (initialActiveUsername) {
+      this.setActiveUsername(initialActiveUsername);
+    }
+  }
+
+  private computePointRadius(scoreIx: number): number {
+    const numUsers = this.corpus![scoreIx].numUsers;
+    const isHovered = this.hoveredScoreIx === scoreIx;
+    const isSelected = get(this.selectedScoreIx) === scoreIx;
+
+    const baseRadius = 12 + Math.log(numUsers) * 9 + numUsers * 0.0016;
+    const zoomLevel = this.transformMatrix[0];
+    const scaleFactor = Math.min(Math.max(zoomLevel, 0.14), 0.324);
+    let radius = Math.min(Math.max(baseRadius * scaleFactor, 4.2), 10000);
+    if (isHovered && !isSelected) {
+      radius += clamp(0.4 * radius, 8, 22);
+    }
+    if (isSelected) {
+      radius += clamp(0.6 * radius, 12, 26);
+    }
+    return radius;
+  }
+
+  public setActiveUsername(username: string) {
+    getHiscoreIDsForUser(username).then((scoreIDs) => {
+      localStorage.setItem('lastUserHiscoreIDs', JSON.stringify(Array.from(scoreIDs)));
       this.highlightedScoreIDs = scoreIDs;
       this.updateData();
     });
-  }
-
-  private computePointRadius(numUsers: number): number {
-    const baseRadius = Math.log(numUsers) * 7 + numUsers * 0.0016;
-    const zoomLevel = Math.sqrt(
-      this.transformMatrix[0] * this.transformMatrix[0] + this.transformMatrix[3] * this.transformMatrix[3]
-    );
-    const scaleFactor = Math.min(Math.max(zoomLevel, 0.14), 0.324);
-    return Math.min(Math.max(baseRadius * scaleFactor, 4.2), 10000);
   }
 
   private updateRadii() {
     if (!this.corpus) {
       return;
     }
-    this.curRadii = this.corpus.map((d) => this.computePointRadius(d.numUsers));
-    this.props.radii = this.regl.buffer(this.curRadii);
+
+    const oldLength = this.curRadii.length;
+    this.curRadii = this.corpus.map((_d, i) => this.computePointRadius(i));
+    if (oldLength !== this.curRadii.length) {
+      this.props.radii.destroy();
+      this.props.radii = this.regl.buffer(this.curRadii);
+    } else {
+      this.props.radii.subdata(this.curRadii);
+    }
   }
 
   private updateData() {
@@ -177,12 +210,28 @@ export class AtlasVizRegl {
     this.corpus = fetchedCorpus.data;
 
     this.props.positions.destroy();
-    this.props.radii.destroy();
     this.props.colors.destroy();
     this.props.alphaMultipliers.destroy();
 
-    // Sort the corpus by number of users so that smaller circles are drawn on top of larger circles
-    this.corpus.sort((a, b) => b.numUsers - a.numUsers);
+    // Sort the corpus to put highlighted scores first and then by number of users so that smaller
+    // circles are drawn on top of larger circles
+    const highlightedScoreIDs = this.highlightedScoreIDs;
+    this.corpus.sort(
+      highlightedScoreIDs
+        ? (a, b) => {
+            const aIsHighlighted = highlightedScoreIDs.has(a.scoreID);
+            const bIsHighlighted = highlightedScoreIDs.has(b.scoreID);
+            if (aIsHighlighted && !bIsHighlighted) {
+              return 1;
+            } else if (!aIsHighlighted && bIsHighlighted) {
+              return -1;
+            } else {
+              return b.numUsers - a.numUsers;
+            }
+          }
+        : (a, b) => b.numUsers - a.numUsers
+    );
+    this.cachedCorpusPositions = this.corpus.flatMap((d) => d.position);
 
     this.props.count = this.corpus.length;
     this.props.positions = this.regl.buffer(this.corpus.map((d) => d.position));
@@ -191,7 +240,7 @@ export class AtlasVizRegl {
     this.props.colors = this.regl.buffer(
       this.corpus.map((d) => {
         // scale from [minAvgPP, maxAvgPP] to [0, 1]
-        const scaled = (d.averagePp - 50) / (630 - 50);
+        const scaled = (d.averagePp - 100) / (630 - 100);
         return [...turboColormap(scaled), 1];
       })
     );
@@ -221,17 +270,16 @@ export class AtlasVizRegl {
       [Infinity, -Infinity]
     );
     // this.props.colors = this.regl.buffer(
-    //   corpus.map((d) => {
+    //   this.corpus.map((d) => {
     //     // scale from [minYear, maxYear] to [0, 1]
     //     const scaled = (d.releaseYear - minYear) / (maxYear - minYear);
     //     return [...turboColormap(scaled), 1];
     //   })
     // );
 
-    const highlightedScoreIDs = this.highlightedScoreIDs;
-    const baseAlphaMultiplier = 0.94;
+    const baseAlphaMultiplier = 1;
     const alphaMultipliers = highlightedScoreIDs
-      ? this.corpus.map((d) => (highlightedScoreIDs.has(d.scoreID) ? baseAlphaMultiplier : 0.28))
+      ? this.corpus.map((d) => (highlightedScoreIDs.has(d.scoreID) ? baseAlphaMultiplier : 0.34))
       : new Float32Array(this.corpus.length).fill(baseAlphaMultiplier);
     this.props.alphaMultipliers = this.regl.buffer(alphaMultipliers);
   }
@@ -263,36 +311,15 @@ export class AtlasVizRegl {
       return null;
     }
 
-    // first we compute the viewport bounds in world space to save some work
-    const topLeftWorld = this.mouseToWorld(0, 0);
-    const bottomRightWorld = this.mouseToWorld(this.canvasWidth, this.canvasHeight);
-    // add 50% padding to the viewport bounds
-    const viewportBoundsWorld = [
-      [
-        topLeftWorld[0] - (bottomRightWorld[0] - topLeftWorld[0]) / 2,
-        topLeftWorld[1] + (topLeftWorld[1] - bottomRightWorld[1]) / 2,
-      ],
-      [
-        bottomRightWorld[0] + (bottomRightWorld[0] - topLeftWorld[0]) / 2,
-        bottomRightWorld[1] - (topLeftWorld[1] - bottomRightWorld[1]) / 2,
-      ],
-    ];
-    const minX = Math.min(viewportBoundsWorld[0][0], viewportBoundsWorld[1][0]);
-    const maxX = Math.max(viewportBoundsWorld[0][0], viewportBoundsWorld[1][0]);
-    const minY = Math.min(viewportBoundsWorld[0][1], viewportBoundsWorld[1][1]);
-    const maxY = Math.max(viewportBoundsWorld[0][1], viewportBoundsWorld[1][1]);
-
     // brute force for now to see how perf is
     //
     // search back to front since smaller circles are drawn on top of larger circles
     for (let i = this.corpus.length - 1; i >= 0; i--) {
       const d = this.corpus[i];
-      const topLeftWorld = d.position;
-      if (topLeftWorld[0] < minX || topLeftWorld[0] > maxX || topLeftWorld[1] < minY || topLeftWorld[1] > maxY) {
-        continue;
-      }
+      const topLeftWorldX = this.cachedCorpusPositions[i * 2];
+      const topLeftWorldY = this.cachedCorpusPositions[i * 2 + 1];
 
-      const centerPixels = this.worldToMouse(topLeftWorld[0], topLeftWorld[1]);
+      const centerPixels = this.worldToMouse(topLeftWorldX, topLeftWorldY);
       const radiusPixels = this.curRadii[i] / 2;
 
       const dist = Math.hypot(centerPixels[0] - mouseX, centerPixels[1] - mouseY);
@@ -304,51 +331,176 @@ export class AtlasVizRegl {
     return null;
   }
 
+  private updatePointSize(i: number) {
+    const newRadius = this.computePointRadius(i);
+    this.curRadii[i] = newRadius;
+    this.props.radii.subdata([newRadius], i * 4);
+  }
+
   private setupInputHandlers() {
     // Convert mouse coordinates from [0, 0] to [viewportWidth, viewportHeight] to world coordinates
 
     /**
      * Zoom centered on the mouse position so that cursor remains at the same point in the world after zooming
      */
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
+    const handleWheel = (evt: WheelEvent) => {
+      evt.preventDefault();
 
-      const mouseWorldBefore = this.mouseToWorld(e.offsetX, e.offsetY);
+      const mouseWorldBefore = this.mouseToWorld(evt.offsetX, evt.offsetY);
 
-      const zoomMagnitude = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 50);
+      const zoomMagnitude = Math.sign(evt.deltaY) * Math.min(Math.abs(evt.deltaY), 50);
       const scale = Math.exp(-zoomMagnitude * 0.003);
       mat3.scale(this.transformMatrix, this.transformMatrix, [scale, scale]);
 
-      const mouseWorldAfter = this.mouseToWorld(e.offsetX, e.offsetY);
+      const mouseWorldAfter = this.mouseToWorld(evt.offsetX, evt.offsetY);
 
       mat3.translate(this.transformMatrix, this.transformMatrix, [
         mouseWorldAfter[0] - mouseWorldBefore[0],
         mouseWorldAfter[1] - mouseWorldBefore[1],
       ]);
-      console.log(this.transformMatrix[0], this.transformMatrix[3]);
 
       this.updateRadii();
     };
 
-    // TODO: Implement pinch-to-zoom for mobile
+    // pointer tracking for mobile multi-touch
+    const activePointersByID = new Map<number, { curMouseCoord: vec2 }>();
 
-    let dragData: { startWorldCoord: vec2 } | null = null;
-    const handlePointerDown = (e: MouseEvent) => {
-      dragData = {
-        startWorldCoord: this.mouseToWorld(e.offsetX, e.offsetY),
+    interface PinchZoomData {
+      lastDistancePixels: number;
+      lastMidpointWorld: vec2;
+    }
+
+    let dragData: { startWorldCoord: vec2; startMouseCoord: vec2; pinchZoomData?: PinchZoomData } | null = null;
+    const handlePointerDown = (evt: PointerEvent) => {
+      evt.preventDefault();
+      (document.activeElement as any)?.blur();
+
+      if (activePointersByID.size === 2) {
+        // ignore additional pointers if two pointers are already active
+        return;
+      }
+
+      if (evt.pointerType === 'mouse') {
+        this.canvas.setPointerCapture(evt.pointerId);
+      }
+
+      const data = {
+        startMouseCoord: [evt.offsetX, evt.offsetY] as vec2,
+        startWorldCoord: this.mouseToWorld(evt.offsetX, evt.offsetY),
       };
 
-      this.selectedScoreIx = this.hitTest(e.offsetX, e.offsetY);
+      activePointersByID.set(evt.pointerId, { curMouseCoord: [evt.offsetX, evt.offsetY] });
+      if (activePointersByID.size === 1) {
+        dragData = data;
+      } else if (activePointersByID.size === 2) {
+        if (!dragData) {
+          throw new UnreachableError('Drag data not set and two pointers are active');
+        }
+
+        const pointerData = Array.from(activePointersByID.values());
+        const [first, second] = pointerData;
+        const initialDistancePixels = Math.hypot(
+          first.curMouseCoord[0] - second.curMouseCoord[0],
+          first.curMouseCoord[1] - second.curMouseCoord[1]
+        );
+        const firstWorld = this.mouseToWorld(first.curMouseCoord[0], first.curMouseCoord[1]);
+        const secondWorld = this.mouseToWorld(second.curMouseCoord[0], second.curMouseCoord[1]);
+        const midpointWorld: vec2 = [(firstWorld[0] + secondWorld[0]) / 2, (firstWorld[1] + secondWorld[1]) / 2];
+        dragData.pinchZoomData = {
+          lastDistancePixels: initialDistancePixels,
+          lastMidpointWorld: midpointWorld,
+        };
+      }
     };
 
-    const handlePointerUp = (e: MouseEvent) => {
-      dragData = null;
+    const handlePointerUp = (evt: PointerEvent) => {
+      evt.preventDefault();
+
+      const didExist = activePointersByID.delete(evt.pointerId);
+      if (!didExist) {
+        return;
+      }
+      if (dragData?.pinchZoomData && activePointersByID.size <= 1) {
+        const pointer = Array.from(activePointersByID.values())[0];
+        dragData = {
+          startMouseCoord: pointer.curMouseCoord,
+          startWorldCoord: this.mouseToWorld(pointer.curMouseCoord[0], pointer.curMouseCoord[1]),
+        };
+        return;
+      }
+
+      const didMove =
+        !!dragData &&
+        Math.hypot(evt.offsetX - dragData.startMouseCoord[0], evt.offsetY - dragData.startMouseCoord[1]) > 5;
+
+      if (activePointersByID.size === 0) {
+        dragData = null;
+      }
+
+      if (evt.pointerType === 'mouse') {
+        this.canvas.releasePointerCapture(evt.pointerId);
+      }
+
+      const hit = this.hitTest(evt.offsetX, evt.offsetY);
+      if (didMove) {
+        return;
+      }
+
+      const oldSelectedScoreIx = get(this.selectedScoreIx);
+      if ((hit === null && oldSelectedScoreIx !== null) || (hit !== null && hit === oldSelectedScoreIx)) {
+        this.selectedScoreIx.set(null);
+        this.updatePointSize(oldSelectedScoreIx);
+      } else if (hit !== null && oldSelectedScoreIx !== hit) {
+        this.selectedScoreIx.set(hit);
+        if (oldSelectedScoreIx !== null) {
+          this.updatePointSize(oldSelectedScoreIx);
+        }
+        this.updatePointSize(hit);
+      }
     };
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (evt: PointerEvent) => {
+      evt.preventDefault();
+
+      const pointerEntry = activePointersByID.get(evt.pointerId);
+      if (pointerEntry) {
+        pointerEntry.curMouseCoord = [evt.offsetX, evt.offsetY];
+
+        if (activePointersByID.size === 2) {
+          // pinch-to-zoom for mobile multi-touch
+          const pointerData = Array.from(activePointersByID.values());
+          const [first, second] = pointerData;
+
+          if (!dragData?.pinchZoomData) {
+            throw new UnreachableError('Expected pinch zoom data to be set');
+          }
+
+          const curDistancePixels = Math.hypot(
+            first.curMouseCoord[0] - second.curMouseCoord[0],
+            first.curMouseCoord[1] - second.curMouseCoord[1]
+          );
+
+          const scaleAdjustment = curDistancePixels / dragData.pinchZoomData.lastDistancePixels;
+          mat3.scale(this.transformMatrix, this.transformMatrix, [scaleAdjustment, scaleAdjustment]);
+
+          dragData.pinchZoomData.lastDistancePixels = curDistancePixels;
+
+          const curMidpointPixels = [
+            (first.curMouseCoord[0] + second.curMouseCoord[0]) / 2,
+            (first.curMouseCoord[1] + second.curMouseCoord[1]) / 2,
+          ];
+          const curMidpointWorld = this.mouseToWorld(curMidpointPixels[0], curMidpointPixels[1]);
+          const translation = vec2.sub(vec2.create(), curMidpointWorld, dragData.pinchZoomData.lastMidpointWorld);
+
+          mat3.translate(this.transformMatrix, this.transformMatrix, translation);
+
+          return;
+        }
+      }
+
       if (dragData) {
         const mouseWorldBefore = dragData.startWorldCoord;
-        const mouseWorldAfter = this.mouseToWorld(e.offsetX, e.offsetY);
+        const mouseWorldAfter = this.mouseToWorld(evt.offsetX, evt.offsetY);
 
         // translate to keep the same point in the world under the cursor
         mat3.translate(this.transformMatrix, this.transformMatrix, [
@@ -358,9 +510,22 @@ export class AtlasVizRegl {
       }
 
       const oldHoveredScoreIx = this.hoveredScoreIx;
-      this.hoveredScoreIx = this.hitTest(e.offsetX, e.offsetY);
-      if ((oldHoveredScoreIx === null) !== (this.hoveredScoreIx === null)) {
+      this.hoveredScoreIx = this.hitTest(evt.offsetX, evt.offsetY);
+      if ((oldHoveredScoreIx === null) !== (this.hoveredScoreIx === null) && evt.pointerType === 'mouse') {
         this.canvas.style.cursor = this.hoveredScoreIx === null ? 'default' : 'pointer';
+      }
+
+      if (oldHoveredScoreIx !== this.hoveredScoreIx) {
+        if (this.hoveredScoreIx !== null) {
+          const newRadius = this.computePointRadius(this.hoveredScoreIx);
+          this.curRadii[this.hoveredScoreIx] = newRadius;
+          this.props.radii.subdata([newRadius], this.hoveredScoreIx * 4);
+        }
+        if (oldHoveredScoreIx !== null) {
+          const newRadius = this.computePointRadius(oldHoveredScoreIx);
+          this.curRadii[oldHoveredScoreIx] = newRadius;
+          this.props.radii.subdata([newRadius], oldHoveredScoreIx * 4);
+        }
       }
     };
 
@@ -383,7 +548,7 @@ export class AtlasVizRegl {
 
     this.inputCbs = {
       pointerDown: handlePointerDown,
-      mouseMove: handleMouseMove,
+      pointerMove: handlePointerMove,
       pointerUp: handlePointerUp,
       wheel: handleWheel,
       windowResize: handleWindowResize,
@@ -392,7 +557,7 @@ export class AtlasVizRegl {
     this.canvas.addEventListener('wheel', handleWheel);
     this.canvas.addEventListener('pointerdown', handlePointerDown);
     this.canvas.addEventListener('pointerup', handlePointerUp);
-    this.canvas.addEventListener('mousemove', handleMouseMove);
+    this.canvas.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('resize', handleWindowResize);
   }
 
@@ -408,7 +573,7 @@ export class AtlasVizRegl {
 
     this.canvas.removeEventListener('wheel', this.inputCbs.wheel);
     this.canvas.removeEventListener('pointerdown', this.inputCbs.pointerDown);
-    this.canvas.removeEventListener('mousemove', this.inputCbs.mouseMove);
+    this.canvas.removeEventListener('pointermove', this.inputCbs.pointerMove);
     this.canvas.removeEventListener('pointerup', this.inputCbs.pointerUp);
     window.removeEventListener('resize', this.inputCbs.windowResize);
   }

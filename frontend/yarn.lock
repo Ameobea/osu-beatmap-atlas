@@ -696,11 +696,12 @@ carbon-components-svelte@^0.85.0:
     "@ibm/telemetry-js" "^1.2.1"
     flatpickr "4.6.9"
 
-carbon-preprocess-svelte@^0.11.2:
-  version "0.11.2"
-  resolved "https://registry.yarnpkg.com/carbon-preprocess-svelte/-/carbon-preprocess-svelte-0.11.2.tgz#5e607d071f486917857e8eddb46d70b8048e95e7"
-  integrity sha512-Ud1qDMgKFVzeGNPK6MgQUXe8z82ZUlJkw6CA1p4h2T6ndjzLzWpHYFxWU8dR4GZRTRWyPdTTI9F67V22gIGwng==
+carbon-preprocess-svelte@^0.11.3:
+  version "0.11.3"
+  resolved "https://registry.yarnpkg.com/carbon-preprocess-svelte/-/carbon-preprocess-svelte-0.11.3.tgz#0bc6415ea86176a931186817212433fee0da48cd"
+  integrity sha512-gzzXNFUCrhYUNWxcuPRACWzDw/1CyyEUMrovXuS5jOTxmUC+m6XlElqbW8BR8+dznzFbwH/8dTfTuCbcixI3/A==
   dependencies:
+    estree-walker "^2.0.2"
     magic-string "^0.30.8"
     postcss "^8.4.36"
     postcss-discard-empty "^6.0.3"
