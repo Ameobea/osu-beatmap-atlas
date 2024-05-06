@@ -4,8 +4,11 @@
   import { onMount } from 'svelte';
   import { loadCorpus } from '../corpus';
   import './reset.css';
+  import { initSentry } from '../sentry';
 
   onMount(() => {
+    initSentry();
+
     if (browser) {
       loadCorpus();
     }
