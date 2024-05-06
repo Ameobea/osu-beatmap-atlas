@@ -1,13 +1,14 @@
 <script lang="ts">
   import { Button, TextInput } from 'carbon-components-svelte';
 
-  export let onSubmit: (username: string) => void;
+  export let onSubmit: (username: string | null) => void;
 
   let searchText = localStorage.getItem('activeUsername') || '';
 
   const handleSubmit = () => {
     if (!searchText) {
-      return;
+      localStorage.removeItem('activeUsername');
+      onSubmit(null);
     }
 
     localStorage.setItem('activeUsername', searchText);

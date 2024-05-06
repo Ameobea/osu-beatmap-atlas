@@ -23,3 +23,19 @@ export const turboColormap = (value: number): [number, number, number] => {
   const index = Math.floor(clampedValue * (TurboColormapLUT.length - 1));
   return TurboColormapLUT[index];
 };
+
+const SixCategoryColorMap: [number, number, number][] = [
+  [83 / 255, 15 / 255, 242 / 255],
+  [24 / 255, 242 / 255, 188 / 255],
+  [234 / 255, 24 / 255, 237 / 255],
+  [245 / 255, 80 / 255, 15 / 255],
+  [227 / 255, 220 / 255, 18 / 255],
+  [44 / 255, 235 / 255, 30 / 255],
+  [0, 0, 0],
+];
+
+export const sixCategoryColorMap = (value: number): [number, number, number] => {
+  const clampedValue = Math.min(1, Math.max(0, value));
+  const index = Math.floor(clampedValue * (SixCategoryColorMap.length - 1));
+  return SixCategoryColorMap[index];
+};

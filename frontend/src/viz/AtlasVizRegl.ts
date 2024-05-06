@@ -6,7 +6,7 @@ import { get, writable, type Writable } from 'svelte/store';
 import { getHiscoreIDsForUser, getUserID } from '../api';
 import { buildColorLegend } from '../components/ColorLegend';
 import { GlobalCorpus, type Corpus, type ScoreMetadata } from '../corpus';
-import { clamp, UnreachableError } from '../util';
+import { UnreachableError, clamp } from '../util';
 import { turboColormap } from './colormap';
 import circleFragShader from './shaders/circle.frag';
 import circleVertShader from './shaders/circle.vert';
@@ -198,7 +198,15 @@ export class AtlasVizRegl {
     return radius;
   }
 
-  public setActiveUsername(username: string) {
+  public setActiveUsername(username: string | null) {
+    if (!username) {
+      this.activeUsername.set(null);
+      this.activeUserID.set(null);
+      this.highlightedScoreIDs = null;
+      this.updateData();
+      return;
+    }
+
     getUserID(username).then((userID) => {
       this.activeUserID.set(userID);
     });
@@ -231,8 +239,17 @@ export class AtlasVizRegl {
     }
   }
 
-  private buildColorLegend(colorMapper = turboColormap) {
-    const { explicitMinVal, explicitMaxVal, getValue, title } = ColorModeConfigs[this.activeColorMode];
+  private buildColorLegend() {
+    const {
+      explicitMinVal,
+      explicitMaxVal,
+      getValue,
+      title,
+      colorMapper = turboColormap,
+      tickCount,
+      tickFormat,
+      tickValues,
+    } = ColorModeConfigs[this.activeColorMode];
     const colorizeDatum = (d: ScoreMetadata) => {
       const scaled = (getValue(d) - minVal) / (maxVal - minVal);
       return [...colorMapper(scaled), 1];
@@ -254,7 +271,7 @@ export class AtlasVizRegl {
         const scaled = (n - minVal) / (maxVal - minVal);
         return colorMapper(scaled);
       },
-      { heightPx: 32, widthPx: 340, maxVal, minVal, title }
+      { heightPx: 32, widthPx: 340, maxVal, minVal, title, tickCount, tickFormat, tickValues }
     );
     this.canvas.parentElement?.appendChild(this.colorLegend);
 

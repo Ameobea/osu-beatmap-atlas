@@ -24,6 +24,7 @@
     <div class="configure-form">
       <Select labelText="Color By" bind:selected={$curColorMode}>
         <SelectItem value={ColorMode.AveragePP} text="Average PP" />
+        <SelectItem value={ColorMode.Mods} text="Mods" />
         <SelectItem value={ColorMode.AimSpeedRatio} text="Aim/Speed Ratio" />
         <SelectItem value={ColorMode.ReleaseYear} text="Release Year" />
       </Select>

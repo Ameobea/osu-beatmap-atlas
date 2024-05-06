@@ -1,5 +1,6 @@
 import { clamp } from '../util';
 
+import type { NumberValue } from 'd3-scale';
 import * as d3 from '../d3';
 
 interface ColorLegendParams {
@@ -8,11 +9,14 @@ interface ColorLegendParams {
   minVal: number;
   maxVal: number;
   title: string;
+  tickCount?: number;
+  tickFormat?: (domainValue: NumberValue, index: number) => string;
+  tickValues?: number[];
 }
 
 export const buildColorLegend = (
   colorFn: (n: number) => [number, number, number],
-  { widthPx, heightPx, minVal, maxVal, title }: ColorLegendParams
+  { widthPx, heightPx, minVal, maxVal, title, tickCount, tickFormat, tickValues }: ColorLegendParams
 ): HTMLElement => {
   const canvas = document.createElement('canvas');
   canvas.width = widthPx;
@@ -42,10 +46,20 @@ export const buildColorLegend = (
     .attr('width', `${widthPx + labelMarginLeft + 8}px`)
     .attr('height', `${heightPx + 38}px`);
   const scale = d3.scaleLinear().domain([minVal, maxVal]).range([0, widthPx]);
+  const axis = d3.axisBottom(scale).ticks(6).tickSize(6);
+  if (tickCount) {
+    axis.ticks(tickCount);
+  }
+  if (tickFormat) {
+    axis.tickFormat(tickFormat);
+  }
+  if (tickValues) {
+    axis.tickValues(tickValues);
+  }
   svg
     .append('g')
     .attr('transform', `translate(${labelMarginLeft},${heightPx})`)
-    .call(d3.axisBottom(scale).ticks(6).tickSize(6))
+    .call(axis)
     .call((g) => g.select('.domain').remove());
 
   svg
