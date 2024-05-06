@@ -1,9 +1,11 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { ColorMode } from '$lib';
   import { onDestroy } from 'svelte';
   import { writable } from 'svelte/store';
   import { GlobalCorpus } from '../corpus';
   import { AtlasVizRegl } from '../viz/AtlasVizRegl';
+  import ConfigureColors from './ConfigureColors.svelte';
   import SelectedBeatmapInfo from './SelectedBeatmapInfo.svelte';
   import TopControls from './TopControls.svelte';
 
@@ -11,13 +13,24 @@
   let windowHeight = 0;
   const dpr = browser ? window.devicePixelRatio || 1 : 1;
   const selectedScoreIx = writable<number | null>(null);
+  const activeUserID = writable<number | null>(null);
 
+  let curColorMode = writable(ColorMode.AveragePP);
   let viz: AtlasVizRegl | null = null;
+
+  $: viz?.setColorMode($curColorMode);
+
   const renderViz = (canvas: HTMLCanvasElement) => {
     if (viz) {
       viz.destroy();
     }
-    viz = new AtlasVizRegl(canvas, selectedScoreIx, (window as any).lastTransformationMatrix);
+    viz = new AtlasVizRegl(
+      canvas,
+      $curColorMode,
+      selectedScoreIx,
+      activeUserID,
+      (window as any).lastTransformationMatrix
+    );
   };
 
   onDestroy(() => {
@@ -38,8 +51,9 @@
     use:renderViz
   ></canvas>
   <TopControls onSubmit={(username) => viz?.setActiveUsername(username)} />
+  <ConfigureColors {curColorMode} />
   {#if $selectedScoreIx !== null && $GlobalCorpus.status === 'loaded'}
-    <SelectedBeatmapInfo corpus={$GlobalCorpus.data} selectedScoreIx={$selectedScoreIx} />
+    <SelectedBeatmapInfo corpus={$GlobalCorpus.data} selectedScoreIx={$selectedScoreIx} activeUserID={$activeUserID} />
   {/if}
 {/if}
 
@@ -48,3 +62,11 @@
 {:else if $GlobalCorpus.status === 'error'}
   <p>Error: {$GlobalCorpus.error}</p>
 {/if}
+
+<style lang="css">
+  @media (max-width: 751px) {
+    :global(.color-legend, .configure-colors) {
+      top: 33px !important;
+    }
+  }
+</style>

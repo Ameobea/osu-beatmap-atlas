@@ -4,7 +4,7 @@ run:
   yarn dev --port 7277
 
 build:
-  yarn build
+  PUBLIC_API_BRIDGE_BASE_URL=https://osu-api-bridge.ameo.dev yarn build
 
 deploy:
   phost update osu-map patch build

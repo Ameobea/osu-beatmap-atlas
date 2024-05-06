@@ -18,7 +18,7 @@
 <div class="root">
   <TextInput
     bind:value={searchText}
-    placeholder="Enter a username"
+    placeholder="Enter an osu! username"
     style="height: 32px"
     on:keydown={(e) => {
       if (e.key === 'Enter') {
@@ -26,9 +26,9 @@
       }
     }}
   />
-  <Button kind="tertiary" size="small" on:click={handleSubmit} style="background: black; color: #efefef !important"
-    >Search</Button
-  >
+  <Button kind="tertiary" size="small" on:click={handleSubmit} style="background: black; color: #efefef !important">
+    Search
+  </Button>
 </div>
 
 <style lang="css">
@@ -36,7 +36,7 @@
     position: absolute;
     top: 0;
     right: 0;
-    width: calc(min(100vw, 600px));
+    width: calc(min(100vw, 400px));
     display: flex;
     flex-direction: row;
   }

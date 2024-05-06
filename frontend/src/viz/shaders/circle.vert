@@ -35,7 +35,7 @@ void main() {
     vColor = color;
     // further reduce the alpha of low-alpha circles when zoomed out far
     float extraAlphaMultiplier = 1.;
-    if (alphaMultiplier < 0.5) {
+    if (alphaMultiplier < 0.4) {
         extraAlphaMultiplier = 0.3 + 0.7 * smoothstep(0.01, 0.05, transformMatrix[0].x);
     }
     vAlphaMultiplier = alphaMultiplier * extraAlphaMultiplier;

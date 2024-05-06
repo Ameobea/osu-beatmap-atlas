@@ -1,9 +1,11 @@
 import { glMatrix, mat3, vec2 } from 'gl-matrix';
 import REGL from 'regl';
 
-import { get, type Writable } from 'svelte/store';
-import { getHiscoreIDsForUser } from '../api';
-import { GlobalCorpus, type Corpus } from '../corpus';
+import { ColorModeConfigs, type ColorMode } from '$lib';
+import { get, writable, type Writable } from 'svelte/store';
+import { getHiscoreIDsForUser, getUserID } from '../api';
+import { buildColorLegend } from '../components/ColorLegend';
+import { GlobalCorpus, type Corpus, type ScoreMetadata } from '../corpus';
 import { clamp, UnreachableError } from '../util';
 import { turboColormap } from './colormap';
 import circleFragShader from './shaders/circle.frag';
@@ -54,10 +56,22 @@ export class AtlasVizRegl {
   private highlightedScoreIDs: Set<string> | null = null;
   private hoveredScoreIx: number | null = null;
   public selectedScoreIx: Writable<number | null>;
+  private activeUsername: Writable<string | null> = writable(null);
+  private activeUserID: Writable<number | null>;
+  private colorLegend: HTMLElement | null = null;
+  private activeColorMode: ColorMode;
 
-  constructor(canvas: HTMLCanvasElement, selectedScoreIx: Writable<number | null>, initialTransformMatrix?: mat3) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    initialColorMode: ColorMode,
+    selectedScoreIx: Writable<number | null>,
+    activeUserID: Writable<number | null>,
+    initialTransformMatrix?: mat3
+  ) {
     this.canvas = canvas;
+    this.activeColorMode = initialColorMode;
     this.selectedScoreIx = selectedScoreIx;
+    this.activeUserID = activeUserID;
     this.canvasWidth = canvas.clientWidth;
     this.canvasHeight = canvas.clientHeight;
 
@@ -161,6 +175,11 @@ export class AtlasVizRegl {
     }
   }
 
+  public setColorMode(colorMode: ColorMode) {
+    this.activeColorMode = colorMode;
+    this.updateData();
+  }
+
   private computePointRadius(scoreIx: number): number {
     const numUsers = this.corpus![scoreIx].numUsers;
     const isHovered = this.hoveredScoreIx === scoreIx;
@@ -180,11 +199,21 @@ export class AtlasVizRegl {
   }
 
   public setActiveUsername(username: string) {
-    getHiscoreIDsForUser(username).then((scoreIDs) => {
-      localStorage.setItem('lastUserHiscoreIDs', JSON.stringify(Array.from(scoreIDs)));
-      this.highlightedScoreIDs = scoreIDs;
-      this.updateData();
+    getUserID(username).then((userID) => {
+      this.activeUserID.set(userID);
     });
+
+    getHiscoreIDsForUser(username)
+      .then((scoreIDs) => {
+        this.activeUsername.set(username);
+        localStorage.setItem('lastUserHiscoreIDs', JSON.stringify(Array.from(scoreIDs)));
+        this.highlightedScoreIDs = scoreIDs;
+        this.updateData();
+      })
+      .catch((err) => {
+        console.error(`Failed to fetch hiscore IDs for user ${username}:`, err);
+        alert(`Failed to fetch hiscores for user "${username}"; check spelling, punctuation, etc. and try again.`);
+      });
   }
 
   private updateRadii() {
@@ -200,6 +229,36 @@ export class AtlasVizRegl {
     } else {
       this.props.radii.subdata(this.curRadii);
     }
+  }
+
+  private buildColorLegend(colorMapper = turboColormap) {
+    const { explicitMinVal, explicitMaxVal, getValue, title } = ColorModeConfigs[this.activeColorMode];
+    const colorizeDatum = (d: ScoreMetadata) => {
+      const scaled = (getValue(d) - minVal) / (maxVal - minVal);
+      return [...colorMapper(scaled), 1];
+    };
+    if (!this.corpus) {
+      return colorizeDatum;
+    }
+
+    const [computedMinVal, computedMaxVal] = this.corpus.reduce(
+      ([min, max], d) => [Math.min(min, getValue(d)), Math.max(max, getValue(d))],
+      [Infinity, -Infinity]
+    );
+    const minVal = explicitMinVal ?? computedMinVal;
+    const maxVal = explicitMaxVal ?? computedMaxVal;
+
+    this.colorLegend?.remove();
+    this.colorLegend = buildColorLegend(
+      (n: number) => {
+        const scaled = (n - minVal) / (maxVal - minVal);
+        return colorMapper(scaled);
+      },
+      { heightPx: 32, widthPx: 340, maxVal, minVal, title }
+    );
+    this.canvas.parentElement?.appendChild(this.colorLegend);
+
+    return colorizeDatum;
   }
 
   private updateData() {
@@ -237,47 +296,11 @@ export class AtlasVizRegl {
     this.props.positions = this.regl.buffer(this.corpus.map((d) => d.position));
     this.updateRadii();
 
-    this.props.colors = this.regl.buffer(
-      this.corpus.map((d) => {
-        // scale from [minAvgPP, maxAvgPP] to [0, 1]
-        const scaled = (d.averagePp - 100) / (630 - 100);
-        return [...turboColormap(scaled), 1];
-      })
-    );
+    const colorMapper = this.buildColorLegend();
 
-    // color by ratio between aim difficulty and speed difficulty
-    let [minRatio, maxRatio] = this.corpus.reduce(
-      ([min, max], d) => [
-        Math.min(min, d.aimDifficulty / d.speedDifficulty),
-        Math.max(max, d.aimDifficulty / d.speedDifficulty),
-      ],
-      [Infinity, -Infinity]
-    );
-    minRatio = clamp(minRatio, 0.85, 1.6);
-    maxRatio = clamp(maxRatio, 0.85, 1.6);
-    // this.props.colors = this.regl.buffer(
-    //   this.corpus.map((d) => {
-    //     // scale from [minRatio, maxRatio] to [0, 1]
-    //     const ratio = clamp(d.aimDifficulty / d.speedDifficulty, minRatio, maxRatio);
-    //     const scaled = (ratio - minRatio) / (maxRatio - minRatio);
-    //     return [...turboColormap(scaled), 1];
-    //   })
-    // );
+    this.props.colors = this.regl.buffer(this.corpus.map(colorMapper));
 
-    // color by release year
-    const [minYear, maxYear] = this.corpus.reduce(
-      ([min, max], d) => [Math.min(min, d.releaseYear), Math.max(max, d.releaseYear)],
-      [Infinity, -Infinity]
-    );
-    // this.props.colors = this.regl.buffer(
-    //   this.corpus.map((d) => {
-    //     // scale from [minYear, maxYear] to [0, 1]
-    //     const scaled = (d.releaseYear - minYear) / (maxYear - minYear);
-    //     return [...turboColormap(scaled), 1];
-    //   })
-    // );
-
-    const baseAlphaMultiplier = 1;
+    const baseAlphaMultiplier = highlightedScoreIDs?.size ? 1 : 0.41;
     const alphaMultipliers = highlightedScoreIDs
       ? this.corpus.map((d) => (highlightedScoreIDs.has(d.scoreID) ? baseAlphaMultiplier : 0.34))
       : new Float32Array(this.corpus.length).fill(baseAlphaMultiplier);
@@ -570,6 +593,7 @@ export class AtlasVizRegl {
     this.props.alphaMultipliers.destroy();
     this.regl.destroy();
     this.regl._gl.getExtension('WEBGL_lose_context')?.loseContext();
+    this.colorLegend?.remove();
 
     this.canvas.removeEventListener('wheel', this.inputCbs.wheel);
     this.canvas.removeEventListener('pointerdown', this.inputCbs.pointerDown);

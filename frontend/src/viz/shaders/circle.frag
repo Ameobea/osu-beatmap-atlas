@@ -21,11 +21,11 @@ void main() {
     }
 
     // inner part of the circle has reduced opacity
-    if (vAlphaMultiplier < 0.5) {
+    if (vAlphaMultiplier < 0.4) {
         alpha *= mix(vCenterAlpha, (vCenterAlpha + 0.9) / 2., smoothstep(borderInner - vBorderFade, borderInner, r));
     } else {
         alpha *= mix(vCenterAlpha, 1.0, smoothstep(borderInner - vBorderFade, borderInner, r));
     }
 
-    gl_FragColor = vec4(vColor.rgb, alpha) * (vAlphaMultiplier < 0.5 ? 0.8 : 1.);
+    gl_FragColor = vec4(vColor.rgb, alpha) * (vAlphaMultiplier < 0.4 ? 0.8 : 1.);
 }

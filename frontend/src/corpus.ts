@@ -4,7 +4,7 @@ import { parseModsBitmask } from './modParser';
 import { logError } from './sentry';
 import { delay } from './util';
 
-interface BeatmapData {
+export interface ScoreMetadata {
   scoreID: string;
   beatmapId: number;
   beatmapSetID: number;
@@ -27,16 +27,16 @@ interface BeatmapData {
   numUsers: number;
 }
 
-export type Corpus = BeatmapData[];
+export type Corpus = ScoreMetadata[];
 
-const parseCorpus = (buffer: ArrayBuffer): BeatmapData[] => {
+const parseCorpus = (buffer: ArrayBuffer): ScoreMetadata[] => {
   const dataView = new DataView(buffer);
 
   // read item count first
   const numItems = dataView.getUint32(0, true);
   let rowDataOffset = 4;
 
-  const beatmaps: BeatmapData[] = [];
+  const beatmaps: ScoreMetadata[] = [];
   const stringStartOffset = numItems * 62 + 4;
   let stringOffset = stringStartOffset;
 
@@ -104,7 +104,7 @@ const parseCorpus = (buffer: ArrayBuffer): BeatmapData[] => {
 type FetchedCorpus =
   | { status: 'notFetched' }
   | { status: 'loading' }
-  | { status: 'loaded'; data: BeatmapData[] }
+  | { status: 'loaded'; data: ScoreMetadata[] }
   | { status: 'error'; error: Error };
 
 export const GlobalCorpus = writable<FetchedCorpus>({ status: 'notFetched' });

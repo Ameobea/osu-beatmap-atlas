@@ -15,6 +15,7 @@
     "@sveltejs/adapter-static": "^3.0.1",
     "@sveltejs/kit": "^2.5.7",
     "@sveltejs/vite-plugin-svelte": "^3.1.0",
+    "@types/d3": "^7.4.3",
     "@types/eslint": "^8.56.10",
     "@typescript-eslint/eslint-plugin": "^7.7.1",
     "@typescript-eslint/parser": "^7.7.1",
@@ -35,6 +36,11 @@
   "type": "module",
   "dependencies": {
     "@sentry/browser": "^7.112.2",
+    "@tanstack/svelte-query": "^5.34.2",
+    "d3-axis": "^3.0.0",
+    "d3-interpolate": "^3.0.1",
+    "d3-scale": "^4.0.2",
+    "d3-selection": "^3.0.0",
     "gl-matrix": "^3.4.3",
     "regl": "^2.1.0"
   }
