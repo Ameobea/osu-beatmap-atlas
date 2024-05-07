@@ -95,7 +95,6 @@
   .content {
     display: flex;
     flex-direction: column;
-    margin: 4px 6px;
     padding: 8px;
     background-color: rgba(0, 0, 0, 0.5);
     flex: 1;
@@ -105,6 +104,7 @@
     font-weight: bold;
     margin-bottom: 2px;
     font-size: 1.6em;
+    white-space: break-spaces;
   }
 
   h3 {
@@ -142,5 +142,19 @@
     flex-direction: column;
     flex: 1;
     margin-top: 4px;
+  }
+
+  @media (max-width: 600px) {
+    .root {
+      font-size: 13px;
+    }
+
+    p {
+      font-size: 0.8em;
+    }
+
+    h3 {
+      font-size: 1em;
+    }
   }
 </style>

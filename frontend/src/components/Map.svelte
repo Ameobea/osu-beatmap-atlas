@@ -14,11 +14,16 @@
   const dpr = browser ? window.devicePixelRatio || 1 : 1;
   const selectedScoreIx = writable<number | null>(null);
   const activeUserID = writable<number | null>(null);
+  const configureColorsOpen = writable(false);
 
   let curColorMode = writable(ColorMode.AveragePP);
   let viz: AtlasVizRegl | null = null;
 
   $: viz?.setColorMode($curColorMode);
+
+  const handleCanvasClick = () => {
+    $configureColorsOpen = false;
+  };
 
   const renderViz = (canvas: HTMLCanvasElement) => {
     if (viz) {
@@ -29,6 +34,7 @@
       $curColorMode,
       selectedScoreIx,
       activeUserID,
+      handleCanvasClick,
       (window as any).lastTransformationMatrix
     );
   };
@@ -51,7 +57,7 @@
     use:renderViz
   ></canvas>
   <TopControls onSubmit={(username) => viz?.setActiveUsername(username)} />
-  <ConfigureColors {curColorMode} />
+  <ConfigureColors {curColorMode} configuratorOpen={configureColorsOpen} />
   {#if $selectedScoreIx !== null && $GlobalCorpus.status === 'loaded'}
     <SelectedBeatmapInfo corpus={$GlobalCorpus.data} selectedScoreIx={$selectedScoreIx} activeUserID={$activeUserID} />
   {/if}
@@ -64,7 +70,7 @@
 {/if}
 
 <style lang="css">
-  @media (max-width: 751px) {
+  @media (max-width: 839px) {
     :global(.color-legend, .configure-colors) {
       top: 33px !important;
     }

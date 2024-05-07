@@ -27,7 +27,12 @@
       }
     }}
   />
-  <Button kind="tertiary" size="small" on:click={handleSubmit} style="background: black; color: #efefef !important">
+  <Button
+    kind="tertiary"
+    size="small"
+    on:click={handleSubmit}
+    style="background: black; color: #efefef !important; width: 86px; text-align: center; padding-left: 19px"
+  >
     Search
   </Button>
 </div>

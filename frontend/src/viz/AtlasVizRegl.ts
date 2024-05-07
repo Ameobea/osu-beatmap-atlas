@@ -66,6 +66,7 @@ export class AtlasVizRegl {
     initialColorMode: ColorMode,
     selectedScoreIx: Writable<number | null>,
     activeUserID: Writable<number | null>,
+    onCanvasClick: () => void,
     initialTransformMatrix?: mat3
   ) {
     this.canvas = canvas;
@@ -105,7 +106,7 @@ export class AtlasVizRegl {
         return transformMatrix;
       })();
 
-    this.setupInputHandlers();
+    this.setupInputHandlers(onCanvasClick);
 
     const drawCircles = regl<Uniforms, Attributes, Props>({
       vert: circleVertShader,
@@ -271,7 +272,16 @@ export class AtlasVizRegl {
         const scaled = (n - minVal) / (maxVal - minVal);
         return colorMapper(scaled);
       },
-      { heightPx: 32, widthPx: 340, maxVal, minVal, title, tickCount, tickFormat, tickValues }
+      {
+        heightPx: 32,
+        widthPx: Math.min(340, this.canvas.clientWidth - 97),
+        maxVal,
+        minVal,
+        title,
+        tickCount,
+        tickFormat,
+        tickValues,
+      }
     );
     this.canvas.parentElement?.appendChild(this.colorLegend);
 
@@ -377,7 +387,7 @@ export class AtlasVizRegl {
     this.props.radii.subdata([newRadius], i * 4);
   }
 
-  private setupInputHandlers() {
+  private setupInputHandlers(onCanvasClick: () => void) {
     // Convert mouse coordinates from [0, 0] to [viewportWidth, viewportHeight] to world coordinates
 
     /**
@@ -414,6 +424,8 @@ export class AtlasVizRegl {
     const handlePointerDown = (evt: PointerEvent) => {
       evt.preventDefault();
       (document.activeElement as any)?.blur();
+
+      onCanvasClick();
 
       if (activePointersByID.size === 2) {
         // ignore additional pointers if two pointers are already active
@@ -584,6 +596,8 @@ export class AtlasVizRegl {
 
       this.canvasWidth = newCanvasWidth;
       this.canvasHeight = newCanvasHeight;
+
+      this.buildColorLegend();
     };
 
     this.inputCbs = {
