@@ -22,12 +22,6 @@ void main() {
     vec2 viewportCoords = (transformMatrix * vec3(position, 1.0)).xy;
     gl_Position = vec4(viewportCoords, 0., 1.);
 
-    // cull circles that are outside the viewport
-    if (gl_Position.x < -1. || gl_Position.x > 1. || gl_Position.y < -1. || gl_Position.y > 1.) {
-        gl_Position = vec4(0., 0., -1., 1.);
-        return;
-    }
-
     bool isSelected = position == selectedCirclePosition;
     bool isHovered = position == hoveredCirclePosition;
     vIsSelected = float(isSelected);
