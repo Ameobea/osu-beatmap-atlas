@@ -7,3 +7,5 @@ export class UnreachableError extends Error {
 }
 
 export const clamp = (x: number, min: number, max: number) => Math.min(Math.max(x, min), max);
+
+export const mix = (x: number, y: number, a: number) => x * (1 - a) + y * a;

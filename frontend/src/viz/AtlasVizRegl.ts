@@ -6,7 +6,7 @@ import { get, writable, type Writable } from 'svelte/store';
 import { getHiscoreIDsForUser, getUserID } from '../api';
 import { buildColorLegend } from '../components/ColorLegend';
 import { GlobalCorpus, type Corpus, type ScoreMetadata } from '../corpus';
-import { UnreachableError, clamp } from '../util';
+import { UnreachableError, clamp, mix } from '../util';
 import { turboColormap } from './colormap';
 import circleFragShader from './shaders/circle.frag';
 import circleVertShader from './shaders/circle.vert';
@@ -23,12 +23,13 @@ interface Uniforms {
   transformMatrix: mat3;
   hoveredCirclePosition: vec2;
   selectedCirclePosition: vec2;
+  dpr: number;
 }
 
 interface Attributes {
   position: REGL.Vec2;
   radius: number;
-  color: REGL.Vec4;
+  color: REGL.Vec3;
   alphaMultiplier: number;
 }
 
@@ -108,6 +109,10 @@ export class AtlasVizRegl {
 
     this.setupInputHandlers(onCanvasClick);
 
+    const dpr = window.devicePixelRatio || 1;
+    // Leave circles slightly smaller on high-DPI screens since they can show extra detail
+    const adjustedDPR = mix(dpr, 1, 0.25);
+
     const drawCircles = regl<Uniforms, Attributes, Props>({
       vert: circleVertShader,
       frag: circleFragShader,
@@ -132,6 +137,7 @@ export class AtlasVizRegl {
           }
           return this.corpus[selectedScoreIx].position;
         },
+        dpr: adjustedDPR,
       },
       count: regl.prop<Props, 'count'>('count'),
       primitive: 'points',
@@ -181,14 +187,14 @@ export class AtlasVizRegl {
     this.updateData();
   }
 
-  private computePointRadius(scoreIx: number): number {
+  private computePointRadius(dpr: number, selectedScoreIx: number | null, scoreIx: number): number {
     const numUsers = this.corpus![scoreIx].numUsers;
     const isHovered = this.hoveredScoreIx === scoreIx;
-    const isSelected = get(this.selectedScoreIx) === scoreIx;
+    const isSelected = selectedScoreIx === scoreIx;
 
     const baseRadius = 12 + Math.log(numUsers) * 9 + numUsers * 0.0016;
     const zoomLevel = this.transformMatrix[0];
-    const scaleFactor = Math.min(Math.max(zoomLevel, 0.14), 0.324);
+    const scaleFactor = clamp(zoomLevel, 0.14, 0.324);
     let radius = Math.min(Math.max(baseRadius * scaleFactor, 4.2), 10000);
     if (isHovered && !isSelected) {
       radius += clamp(0.4 * radius, 8, 22);
@@ -231,7 +237,9 @@ export class AtlasVizRegl {
     }
 
     const oldLength = this.curRadii.length;
-    this.curRadii = this.corpus.map((_d, i) => this.computePointRadius(i));
+    const selectedScoreIx = get(this.selectedScoreIx);
+    const dpr = window.devicePixelRatio || 1;
+    this.curRadii = this.corpus.map((_d, i) => this.computePointRadius(dpr, selectedScoreIx, i));
     if (oldLength !== this.curRadii.length) {
       this.props.radii.destroy();
       this.props.radii = this.regl.buffer(this.curRadii);
@@ -253,7 +261,7 @@ export class AtlasVizRegl {
     } = ColorModeConfigs[this.activeColorMode];
     const colorizeDatum = (d: ScoreMetadata) => {
       const scaled = (getValue(d) - minVal) / (maxVal - minVal);
-      return [...colorMapper(scaled), 1];
+      return colorMapper(scaled);
     };
     if (!this.corpus) {
       return colorizeDatum;
@@ -327,9 +335,9 @@ export class AtlasVizRegl {
 
     this.props.colors = this.regl.buffer(this.corpus.map(colorMapper));
 
-    const baseAlphaMultiplier = highlightedScoreIDs?.size ? 1 : 0.41;
+    const baseAlphaMultiplier = highlightedScoreIDs?.size ? 1 : 0.628;
     const alphaMultipliers = highlightedScoreIDs
-      ? this.corpus.map((d) => (highlightedScoreIDs.has(d.scoreID) ? baseAlphaMultiplier : 0.34))
+      ? this.corpus.map((d) => (highlightedScoreIDs.has(d.scoreID) ? baseAlphaMultiplier : 0.11))
       : new Float32Array(this.corpus.length).fill(baseAlphaMultiplier);
     this.props.alphaMultipliers = this.regl.buffer(alphaMultipliers);
   }
@@ -365,7 +373,6 @@ export class AtlasVizRegl {
     //
     // search back to front since smaller circles are drawn on top of larger circles
     for (let i = this.corpus.length - 1; i >= 0; i--) {
-      const d = this.corpus[i];
       const topLeftWorldX = this.cachedCorpusPositions[i * 2];
       const topLeftWorldY = this.cachedCorpusPositions[i * 2 + 1];
 
@@ -382,7 +389,9 @@ export class AtlasVizRegl {
   }
 
   private updatePointSize(i: number) {
-    const newRadius = this.computePointRadius(i);
+    const selectedScoreIx = get(this.selectedScoreIx);
+    const dpr = window.devicePixelRatio || 1;
+    const newRadius = this.computePointRadius(dpr, selectedScoreIx, i);
     this.curRadii[i] = newRadius;
     this.props.radii.subdata([newRadius], i * 4);
   }
@@ -567,14 +576,15 @@ export class AtlasVizRegl {
         this.canvas.style.cursor = this.hoveredScoreIx === null ? 'default' : 'pointer';
       }
 
+      const dpr = window.devicePixelRatio || 1;
       if (oldHoveredScoreIx !== this.hoveredScoreIx) {
         if (this.hoveredScoreIx !== null) {
-          const newRadius = this.computePointRadius(this.hoveredScoreIx);
+          const newRadius = this.computePointRadius(dpr, get(this.selectedScoreIx), this.hoveredScoreIx);
           this.curRadii[this.hoveredScoreIx] = newRadius;
           this.props.radii.subdata([newRadius], this.hoveredScoreIx * 4);
         }
         if (oldHoveredScoreIx !== null) {
-          const newRadius = this.computePointRadius(oldHoveredScoreIx);
+          const newRadius = this.computePointRadius(dpr, get(this.selectedScoreIx), oldHoveredScoreIx);
           this.curRadii[oldHoveredScoreIx] = newRadius;
           this.props.radii.subdata([newRadius], oldHoveredScoreIx * 4);
         }

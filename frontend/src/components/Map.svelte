@@ -56,6 +56,7 @@
     style="width: {windowWidth}px; height: {windowHeight}px; touch-action: none; user-select: none;"
     use:renderViz
   ></canvas>
+  <!-- <LeftPane /> -->
   <TopControls onSubmit={(username) => viz?.setActiveUsername(username)} />
   <ConfigureColors {curColorMode} configuratorOpen={configureColorsOpen} />
   {#if $selectedScoreIx !== null && $GlobalCorpus.status === 'loaded'}

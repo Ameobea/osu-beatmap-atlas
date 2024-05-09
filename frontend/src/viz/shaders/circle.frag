@@ -1,11 +1,10 @@
 precision mediump float;
 
-varying vec4 vColor;
+varying vec3 vColor;
 varying float vBorderWidth;
 varying float vBorderFade;
+varying float vRimAlpha;
 varying float vCenterAlpha;
-varying float vAlphaMultiplier;
-varying float vIsSelected;
 
 void main() {
     float r = length(gl_PointCoord - vec2(0.5));
@@ -13,19 +12,16 @@ void main() {
     float borderOuter = 0.5 - vBorderFade;
     float borderInner = borderOuter - vBorderWidth;
 
+    // clip outer edge of the circle
     float alpha = 1. - smoothstep(borderOuter, 0.5, r);
-    alpha *= vAlphaMultiplier;
 
     if (alpha < 0.01) {
         discard;
     }
 
     // inner part of the circle has reduced opacity
-    if (vAlphaMultiplier < 0.4) {
-        alpha *= mix(vCenterAlpha, (vCenterAlpha + 0.9) / 2., smoothstep(borderInner - vBorderFade, borderInner, r));
-    } else {
-        alpha *= mix(vCenterAlpha, 1.0, smoothstep(borderInner - vBorderFade, borderInner, r));
-    }
+    float rimFactor = smoothstep(borderInner - vBorderFade, borderInner, r);
+    alpha *= mix(vCenterAlpha, vRimAlpha, rimFactor);
 
-    gl_FragColor = vec4(vColor.rgb, alpha) * (vAlphaMultiplier < 0.4 ? 0.8 : 1.);
+    gl_FragColor = vec4(vColor.rgb, alpha);
 }
