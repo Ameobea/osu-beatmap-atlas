@@ -9,6 +9,7 @@ uniform mat3 transformMatrix;
 uniform vec2 hoveredCirclePosition;
 uniform vec2 selectedCirclePosition;
 uniform float dpr;
+uniform float zoomLevel;
 
 varying float vBorderWidth;
 varying float vBorderFade;
@@ -40,8 +41,8 @@ void main() {
     vCenterAlpha = 0.7 + 0.2 * centerAlphaFactor;
 
     // further reduce the alpha of low-alpha circles when zoomed out far
-    float zoomFactor = smoothstep(0.007, 0.06, transformMatrix[0].x);
-    float zoomAlphaMultiplier = alphaMultiplier < 1. ? 0.05 + 0.95 * zoomFactor : 1.;
+    float zoomFactor = pow(smoothstep(4.6, 5.7, zoomLevel), 0.8);
+    float zoomAlphaMultiplier = alphaMultiplier < 1. ? 0.24 + 0.76 * zoomFactor : 1.;
 
     vRimAlpha = mix(alphaMultiplier, 1., 0.38) * zoomAlphaMultiplier;
 

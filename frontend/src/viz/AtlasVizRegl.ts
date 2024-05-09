@@ -24,6 +24,7 @@ interface Uniforms {
   hoveredCirclePosition: vec2;
   selectedCirclePosition: vec2;
   dpr: number;
+  zoomLevel: number;
 }
 
 interface Attributes {
@@ -61,6 +62,7 @@ export class AtlasVizRegl {
   private activeUserID: Writable<number | null>;
   private colorLegend: HTMLElement | null = null;
   private activeColorMode: ColorMode;
+  private isDestroyed = false;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -138,6 +140,7 @@ export class AtlasVizRegl {
           return this.corpus[selectedScoreIx].position;
         },
         dpr: adjustedDPR,
+        zoomLevel: () => Math.log(this.transformMatrix[0] * this.canvasWidth),
       },
       count: regl.prop<Props, 'count'>('count'),
       primitive: 'points',
@@ -187,15 +190,16 @@ export class AtlasVizRegl {
     this.updateData();
   }
 
-  private computePointRadius(dpr: number, selectedScoreIx: number | null, scoreIx: number): number {
+  private computePointRadius(selectedScoreIx: number | null, scoreIx: number): number {
     const numUsers = this.corpus![scoreIx].numUsers;
     const isHovered = this.hoveredScoreIx === scoreIx;
     const isSelected = selectedScoreIx === scoreIx;
 
     const baseRadius = 12 + Math.log(numUsers) * 9 + numUsers * 0.0016;
-    const zoomLevel = this.transformMatrix[0];
-    const scaleFactor = clamp(zoomLevel, 0.14, 0.324);
-    let radius = Math.min(Math.max(baseRadius * scaleFactor, 4.2), 10000);
+    // TODO: precompute zoom level and scale factor
+    const zoomLevel = Math.log(this.transformMatrix[0] * this.canvasWidth);
+    const scaleFactor = clamp(zoomLevel, 3, 9) * 0.037;
+    let radius = Math.max(baseRadius * scaleFactor, 4.2);
     if (isHovered && !isSelected) {
       radius += clamp(0.4 * radius, 8, 22);
     }
@@ -215,11 +219,19 @@ export class AtlasVizRegl {
     }
 
     getUserID(username).then((userID) => {
+      if (this.isDestroyed) {
+        return;
+      }
+
       this.activeUserID.set(userID);
     });
 
     getHiscoreIDsForUser(username)
       .then((scoreIDs) => {
+        if (this.isDestroyed) {
+          return;
+        }
+
         this.activeUsername.set(username);
         localStorage.setItem('lastUserHiscoreIDs', JSON.stringify(Array.from(scoreIDs)));
         this.highlightedScoreIDs = scoreIDs;
@@ -238,8 +250,7 @@ export class AtlasVizRegl {
 
     const oldLength = this.curRadii.length;
     const selectedScoreIx = get(this.selectedScoreIx);
-    const dpr = window.devicePixelRatio || 1;
-    this.curRadii = this.corpus.map((_d, i) => this.computePointRadius(dpr, selectedScoreIx, i));
+    this.curRadii = this.corpus.map((_d, i) => this.computePointRadius(selectedScoreIx, i));
     if (oldLength !== this.curRadii.length) {
       this.props.radii.destroy();
       this.props.radii = this.regl.buffer(this.curRadii);
@@ -390,8 +401,7 @@ export class AtlasVizRegl {
 
   private updatePointSize(i: number) {
     const selectedScoreIx = get(this.selectedScoreIx);
-    const dpr = window.devicePixelRatio || 1;
-    const newRadius = this.computePointRadius(dpr, selectedScoreIx, i);
+    const newRadius = this.computePointRadius(selectedScoreIx, i);
     this.curRadii[i] = newRadius;
     this.props.radii.subdata([newRadius], i * 4);
   }
@@ -576,15 +586,14 @@ export class AtlasVizRegl {
         this.canvas.style.cursor = this.hoveredScoreIx === null ? 'default' : 'pointer';
       }
 
-      const dpr = window.devicePixelRatio || 1;
       if (oldHoveredScoreIx !== this.hoveredScoreIx) {
         if (this.hoveredScoreIx !== null) {
-          const newRadius = this.computePointRadius(dpr, get(this.selectedScoreIx), this.hoveredScoreIx);
+          const newRadius = this.computePointRadius(get(this.selectedScoreIx), this.hoveredScoreIx);
           this.curRadii[this.hoveredScoreIx] = newRadius;
           this.props.radii.subdata([newRadius], this.hoveredScoreIx * 4);
         }
         if (oldHoveredScoreIx !== null) {
-          const newRadius = this.computePointRadius(dpr, get(this.selectedScoreIx), oldHoveredScoreIx);
+          const newRadius = this.computePointRadius(get(this.selectedScoreIx), oldHoveredScoreIx);
           this.curRadii[oldHoveredScoreIx] = newRadius;
           this.props.radii.subdata([newRadius], oldHoveredScoreIx * 4);
         }
@@ -607,6 +616,7 @@ export class AtlasVizRegl {
       this.canvasWidth = newCanvasWidth;
       this.canvasHeight = newCanvasHeight;
 
+      // this.updateRadii();
       this.buildColorLegend();
     };
 
@@ -641,5 +651,7 @@ export class AtlasVizRegl {
     this.canvas.removeEventListener('pointermove', this.inputCbs.pointerMove);
     this.canvas.removeEventListener('pointerup', this.inputCbs.pointerUp);
     window.removeEventListener('resize', this.inputCbs.windowResize);
+
+    this.isDestroyed = true;
   }
 }
