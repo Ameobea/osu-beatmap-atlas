@@ -25,6 +25,7 @@ interface Uniforms {
   selectedCirclePosition: vec2;
   dpr: number;
   zoomLevel: number;
+  alphaReductionStartZoomLevel: number;
 }
 
 interface Attributes {
@@ -141,6 +142,7 @@ export class AtlasVizRegl {
         },
         dpr: adjustedDPR,
         zoomLevel: () => Math.log(this.transformMatrix[0] * this.canvasWidth),
+        alphaReductionStartZoomLevel: () => 4.6 - (this.canvasWidth <= 600 ? 0.4 : 0),
       },
       count: regl.prop<Props, 'count'>('count'),
       primitive: 'points',
@@ -564,6 +566,8 @@ export class AtlasVizRegl {
           const translation = vec2.sub(vec2.create(), curMidpointWorld, dragData.pinchZoomData.lastMidpointWorld);
 
           mat3.translate(this.transformMatrix, this.transformMatrix, translation);
+
+          this.updateRadii();
 
           return;
         }
