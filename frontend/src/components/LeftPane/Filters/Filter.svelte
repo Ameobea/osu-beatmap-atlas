@@ -1,19 +1,59 @@
 <script lang="ts">
+  import { genRandomStringID } from '../../../util';
   import DoubleEndedSlider from './DoubleEndedSlider.svelte';
 
   export let min: number;
   export let max: number;
   export let value: [number, number];
+  export let label: string;
+  export let step = 1;
+  export let formatLabel: ((v: number) => string) | undefined = undefined;
+
+  let id = genRandomStringID();
+
+  $: toFixedPrecision = Math.max(step.toString().split('.')[1]?.length || 0, 1);
+
+  const formatValue = (v: number) => {
+    if (formatLabel) {
+      return formatLabel(v);
+    }
+
+    let formatted = v.toFixed(toFixedPrecision);
+    while (formatted.endsWith('0') || formatted.endsWith('.')) {
+      const lastChar = formatted.slice(-1);
+      formatted = formatted.slice(0, -1);
+      if (lastChar === '.') {
+        break;
+      }
+    }
+    return formatted;
+  };
 </script>
 
 <div class="root">
-  <DoubleEndedSlider {min} {max} bind:value />
-  <span>{value[0]} - {value[1]}</span>
+  <label for={id}>{label}</label>
+  <DoubleEndedSlider {id} {min} {max} {step} bind:value />
+  <div class="value-display">{formatValue(value[0])} - {formatValue(value[1])}</div>
 </div>
 
 <style lang="css">
   .root {
     display: flex;
     flex-direction: column;
+    align-items: center;
+    margin-top: 22px;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  label {
+    margin-bottom: -12px;
+  }
+
+  .value-display {
+    text-align: center;
+    font-family: 'IBM Plex Mono', 'Oxygen Mono', 'Hack', monospace;
+    margin-top: -6px;
+    font-size: 13px;
   }
 </style>

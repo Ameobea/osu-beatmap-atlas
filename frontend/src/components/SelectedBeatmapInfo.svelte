@@ -11,8 +11,7 @@
   $: coverImageURL = `https://assets.ppy.sh/beatmaps/${entry.beatmapSetID}/covers/cover.jpg`;
   $: downloadURL = `https://osu.ppy.sh/beatmapsets/${entry.beatmapSetID}/download`;
   $: osuDirectURL = `osu://b/${entry.beatmapId}`;
-  $: realLengthSeconds = entry.modString.includes('DT') ? Math.ceil(entry.lengthSeconds / 1.5) : entry.lengthSeconds;
-  $: length = `${Math.floor(realLengthSeconds / 60)}:${(realLengthSeconds % 60).toString().padStart(2, '0')}`;
+  $: length = `${Math.floor(entry.realLengthSeconds / 60)}:${(entry.realLengthSeconds % 60).toString().padStart(2, '0')}`;
 
   $: bestUserScoreRes = createQuery({
     queryKey: ['bestUserScoreForBeatmap', entry?.beatmapId, entry?.modString, activeUserID],

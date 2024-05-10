@@ -5,6 +5,7 @@ import { logError } from './sentry';
 import { delay } from './util';
 
 export interface ScoreMetadata {
+  originalIx: number;
   scoreID: string;
   beatmapId: number;
   beatmapSetID: number;
@@ -18,12 +19,15 @@ export interface ScoreMetadata {
   mapperName: string;
   releaseYear: number;
   lengthSeconds: number;
+  realLengthSeconds: number;
   bpm: number;
+  actualBPM: number;
   AR: number;
   CS: number;
   OD: number;
   aimDifficulty: number;
   speedDifficulty: number;
+  aimSpeedRatio: number;
   numUsers: number;
 }
 
@@ -74,7 +78,12 @@ const parseCorpus = (buffer: ArrayBuffer): ScoreMetadata[] => {
 
     const modString = parseModsBitmask(modsBitmask);
 
+    const realLengthSeconds = modString.includes('DT') ? Math.ceil(lengthSeconds / 1.5) : lengthSeconds;
+    const aimSpeedRatio = aimDifficulty / speedDifficulty;
+    const actualBPM = bpm * (modString.includes('DT') ? 1.5 : 1);
+
     beatmaps.push({
+      originalIx: i,
       scoreID: `${beatmapId}_${modString}`,
       beatmapId,
       beatmapSetID,
@@ -88,12 +97,15 @@ const parseCorpus = (buffer: ArrayBuffer): ScoreMetadata[] => {
       mapperName,
       releaseYear,
       lengthSeconds,
+      realLengthSeconds,
       bpm,
+      actualBPM,
       AR,
       CS,
       OD,
       aimDifficulty,
       speedDifficulty,
+      aimSpeedRatio,
       numUsers,
     });
   }

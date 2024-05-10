@@ -6,10 +6,12 @@ import { UnreachableError } from '../util';
 import { sixCategoryColorMap } from '../viz/colormap';
 
 export enum ColorMode {
+  StarRating,
   AveragePP,
   ReleaseYear,
   AimSpeedRatio,
   Mods,
+  Length,
 }
 
 interface ColorModeConfig {
@@ -24,13 +26,23 @@ interface ColorModeConfig {
 }
 
 export const ColorModeConfigs: { [K in ColorMode]: ColorModeConfig } = {
+  [ColorMode.StarRating]: {
+    explicitMinVal: 3.8,
+    explicitMaxVal: 9.3,
+    getValue: (d) => d.starRating,
+    title: 'Star Rating',
+  },
   [ColorMode.AveragePP]: {
     explicitMinVal: 100,
     explicitMaxVal: 615,
     getValue: (d) => d.averagePp,
     title: 'Average PP',
   },
-  [ColorMode.ReleaseYear]: { getValue: (d) => d.releaseYear, title: 'Year Ranked' },
+  [ColorMode.ReleaseYear]: {
+    getValue: (d) => d.releaseYear,
+    title: 'Year Ranked',
+    tickFormat: (domainValue) => String(domainValue),
+  },
   [ColorMode.AimSpeedRatio]: {
     explicitMinVal: 0.85,
     explicitMaxVal: 1.6,
@@ -87,6 +99,17 @@ export const ColorModeConfigs: { [K in ColorMode]: ColorModeConfig } = {
         default:
           throw new UnreachableError(`Unhandled domain value: ${domainValue}`);
       }
+    },
+  },
+  [ColorMode.Length]: {
+    getValue: (d) => d.lengthSeconds,
+    title: 'Length Seconds (inc. mods)',
+    explicitMinVal: 10,
+    explicitMaxVal: 620,
+    tickValues: [10, 60, 120, 180, 300, 420, 600],
+    tickFormat: (domainValue) => {
+      const value = typeof domainValue === 'number' ? domainValue : domainValue.valueOf();
+      return `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, '0')}`;
     },
   },
 };

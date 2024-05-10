@@ -23,10 +23,12 @@
   {#if $configuratorOpen}
     <div class="configure-form">
       <Select labelText="Color By" bind:selected={$curColorMode}>
+        <SelectItem value={ColorMode.StarRating} text="Star Rating" />
         <SelectItem value={ColorMode.AveragePP} text="Average PP" />
         <SelectItem value={ColorMode.Mods} text="Mods" />
         <SelectItem value={ColorMode.AimSpeedRatio} text="Aim/Speed Ratio" />
         <SelectItem value={ColorMode.ReleaseYear} text="Release Year" />
+        <SelectItem value={ColorMode.Length} text="Length" />
       </Select>
     </div>
   {/if}
@@ -36,7 +38,7 @@
   .root {
     position: absolute;
     top: 0;
-    left: calc(min(340px, 100vw - 98px) + 12px);
+    left: calc(min(340px, 100vw - 98px) + 17px);
     display: flex;
     flex-direction: row;
   }

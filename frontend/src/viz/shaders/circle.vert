@@ -39,7 +39,7 @@ void main() {
 
     // center alpha gets closer to 1 as the circle gets smaller
     float centerAlphaFactor = 1. - smoothstep(6., 22., radius);
-    vCenterAlpha = 0.7 + 0.2 * centerAlphaFactor;
+    vCenterAlpha = 0.65 + 0.22 * centerAlphaFactor;
 
     // further reduce the alpha of low-alpha circles when zoomed out far
     float zoomFactor = pow(smoothstep(alphaReductionStartZoomLevel, alphaReductionStartZoomLevel + 1.1, zoomLevel), 0.8);
@@ -57,4 +57,10 @@ void main() {
     }
     vCenterAlpha *= centerAlphaMultiplier;
 
+    float farZoomAlphaMultiplier = 0.06 + 0.94 * smoothstep(2., 4.1, zoomLevel);
+    if (isSelected || isHovered || alphaMultiplier >= 1.) {
+        farZoomAlphaMultiplier = mix(farZoomAlphaMultiplier, 1., 0.78);
+    }
+    vCenterAlpha *= farZoomAlphaMultiplier;
+    vRimAlpha *= farZoomAlphaMultiplier;
 }

@@ -923,6 +923,11 @@ carbon-components-svelte@^0.85.0:
     "@ibm/telemetry-js" "^1.2.1"
     flatpickr "4.6.9"
 
+carbon-icons-svelte@^12.6.0:
+  version "12.6.0"
+  resolved "https://registry.yarnpkg.com/carbon-icons-svelte/-/carbon-icons-svelte-12.6.0.tgz#fbda37a7f69129c8e82544599bde40c64c288b42"
+  integrity sha512-tw5jUSASVfdZ30CcynKWwQalkUIn3I2OFKvyormaoNH6bWjtXp21ESqDSuZ0RgZbxzaeBoUJaEJpsSTX5YjElA==
+
 carbon-preprocess-svelte@^0.11.3:
   version "0.11.3"
   resolved "https://registry.yarnpkg.com/carbon-preprocess-svelte/-/carbon-preprocess-svelte-0.11.3.tgz#0bc6415ea86176a931186817212433fee0da48cd"

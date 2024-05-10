@@ -23,7 +23,7 @@ export const buildColorLegend = (
   canvas.height = heightPx;
   canvas.style.position = 'absolute';
   canvas.style.top = '0';
-  const labelMarginLeft = 6;
+  const labelMarginLeft = 12;
   canvas.style.left = `${labelMarginLeft}px`;
 
   const ctx = canvas.getContext('2d')!;
@@ -43,7 +43,7 @@ export const buildColorLegend = (
   const svg = d3
     .select(document.createElement('div'))
     .append('svg')
-    .attr('width', `${widthPx + labelMarginLeft + 8}px`)
+    .attr('width', `${widthPx + labelMarginLeft + 20}px`)
     .attr('height', `${heightPx + 38}px`);
   const scale = d3.scaleLinear().domain([minVal, maxVal]).range([0, widthPx]);
   const axis = d3.axisBottom(scale).ticks(6).tickSize(6);

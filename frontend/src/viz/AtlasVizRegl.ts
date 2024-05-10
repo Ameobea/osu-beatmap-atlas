@@ -35,6 +35,15 @@ interface Attributes {
   alphaMultiplier: number;
 }
 
+export interface FilterState {
+  pp: [number, number];
+  stars: [number, number];
+  aimSpeedRatio: [number, number];
+  releaseYear: [number, number];
+  bpm: [number, number];
+  lengthSeconds: [number, number];
+}
+
 glMatrix.setMatrixArrayType(Array);
 
 export class AtlasVizRegl {
@@ -53,6 +62,7 @@ export class AtlasVizRegl {
   private canvasWidth = 1;
   private canvasHeight = 1;
   private corpus: Corpus | undefined;
+  private fullCorpus: Corpus | undefined;
   cachedCorpusPositions: number[] = [];
   private curRadii: number[] = [];
   public transformMatrix: mat3;
@@ -64,12 +74,14 @@ export class AtlasVizRegl {
   private colorLegend: HTMLElement | null = null;
   private activeColorMode: ColorMode;
   private isDestroyed = false;
+  private filterState: FilterState;
 
   constructor(
     canvas: HTMLCanvasElement,
     initialColorMode: ColorMode,
     selectedScoreIx: Writable<number | null>,
     activeUserID: Writable<number | null>,
+    filterState: FilterState,
     onCanvasClick: () => void,
     initialTransformMatrix?: mat3
   ) {
@@ -77,6 +89,7 @@ export class AtlasVizRegl {
     this.activeColorMode = initialColorMode;
     this.selectedScoreIx = selectedScoreIx;
     this.activeUserID = activeUserID;
+    this.filterState = filterState;
     this.canvasWidth = canvas.clientWidth;
     this.canvasHeight = canvas.clientHeight;
 
@@ -261,6 +274,16 @@ export class AtlasVizRegl {
     }
   }
 
+  public getGlobalScoreIx(filteredScoreIx: number): number | null {
+    if (!this.corpus || !this.fullCorpus) {
+      return null;
+    }
+
+    const datum = this.corpus[filteredScoreIx];
+    const globalIx = this.fullCorpus.findIndex((d) => d.scoreID === datum.scoreID);
+    return globalIx === -1 ? null : globalIx;
+  }
+
   private buildColorLegend() {
     const {
       explicitMinVal,
@@ -314,7 +337,35 @@ export class AtlasVizRegl {
     if (fetchedCorpus.status !== 'loaded') {
       return;
     }
-    this.corpus = fetchedCorpus.data;
+
+    this.fullCorpus = fetchedCorpus.data;
+
+    const oldSelectedScoreIx = get(this.selectedScoreIx);
+    const oldSelected = oldSelectedScoreIx !== null ? this.corpus?.[oldSelectedScoreIx] : null;
+    const oldHoveredScoreIx = this.hoveredScoreIx;
+    const oldHovered = oldHoveredScoreIx !== null ? this.corpus?.[oldHoveredScoreIx] : null;
+    this.corpus = fetchedCorpus.data.filter((d) => {
+      const pp = d.averagePp;
+      const stars = d.starRating;
+      const aimSpeedRatio = d.aimSpeedRatio;
+      const bpm = d.bpm;
+      const releaseYear = d.releaseYear;
+      const lengthSeconds = d.realLengthSeconds;
+      return (
+        pp >= this.filterState.pp[0] &&
+        pp <= this.filterState.pp[1] &&
+        stars >= this.filterState.stars[0] &&
+        stars <= this.filterState.stars[1] &&
+        aimSpeedRatio >= this.filterState.aimSpeedRatio[0] &&
+        aimSpeedRatio <= this.filterState.aimSpeedRatio[1] &&
+        bpm >= this.filterState.bpm[0] &&
+        bpm <= this.filterState.bpm[1] &&
+        releaseYear >= this.filterState.releaseYear[0] &&
+        releaseYear <= this.filterState.releaseYear[1] &&
+        lengthSeconds >= this.filterState.lengthSeconds[0] &&
+        lengthSeconds <= this.filterState.lengthSeconds[1]
+      );
+    });
 
     this.props.positions.destroy();
     this.props.colors.destroy();
@@ -323,6 +374,7 @@ export class AtlasVizRegl {
     // Sort the corpus to put highlighted scores first and then by number of users so that smaller
     // circles are drawn on top of larger circles
     const highlightedScoreIDs = this.highlightedScoreIDs;
+
     this.corpus.sort(
       highlightedScoreIDs
         ? (a, b) => {
@@ -340,6 +392,11 @@ export class AtlasVizRegl {
     );
     this.cachedCorpusPositions = this.corpus.flatMap((d) => d.position);
 
+    const newSelectedScoreIx = this.corpus.findIndex((d) => d === oldSelected);
+    this.selectedScoreIx.set(newSelectedScoreIx === -1 ? null : newSelectedScoreIx);
+    const newHoveredScoreIx = this.corpus.findIndex((d) => d === oldHovered);
+    this.hoveredScoreIx = newHoveredScoreIx === -1 ? null : newHoveredScoreIx;
+
     this.props.count = this.corpus.length;
     this.props.positions = this.regl.buffer(this.corpus.map((d) => d.position));
     this.updateRadii();
@@ -353,6 +410,11 @@ export class AtlasVizRegl {
       ? this.corpus.map((d) => (highlightedScoreIDs.has(d.scoreID) ? baseAlphaMultiplier : 0.11))
       : new Float32Array(this.corpus.length).fill(baseAlphaMultiplier);
     this.props.alphaMultipliers = this.regl.buffer(alphaMultipliers);
+  }
+
+  public setFilterState(filterState: FilterState) {
+    this.filterState = filterState;
+    this.updateData();
   }
 
   private mouseToWorld = (x: number, y: number): vec2 => {
@@ -441,7 +503,12 @@ export class AtlasVizRegl {
       lastMidpointWorld: vec2;
     }
 
-    let dragData: { startWorldCoord: vec2; startMouseCoord: vec2; pinchZoomData?: PinchZoomData } | null = null;
+    let dragData: {
+      startWorldCoord: vec2;
+      startMouseCoord: vec2;
+      pinchZoomData?: PinchZoomData;
+      didPinchZoom?: boolean;
+    } | null = null;
     const handlePointerDown = (evt: PointerEvent) => {
       evt.preventDefault();
       (document.activeElement as any)?.blur();
@@ -498,6 +565,7 @@ export class AtlasVizRegl {
         dragData = {
           startMouseCoord: pointer.curMouseCoord,
           startWorldCoord: this.mouseToWorld(pointer.curMouseCoord[0], pointer.curMouseCoord[1]),
+          didPinchZoom: true,
         };
         return;
       }
@@ -507,7 +575,12 @@ export class AtlasVizRegl {
         Math.hypot(evt.offsetX - dragData.startMouseCoord[0], evt.offsetY - dragData.startMouseCoord[1]) > 5;
 
       if (activePointersByID.size === 0) {
+        const didPinchZoom = dragData?.didPinchZoom;
         dragData = null;
+        // prevent circles from getting selected when ending a pinch zoom
+        if (didPinchZoom) {
+          return;
+        }
       }
 
       if (evt.pointerType === 'mouse') {
@@ -620,7 +693,7 @@ export class AtlasVizRegl {
       this.canvasWidth = newCanvasWidth;
       this.canvasHeight = newCanvasHeight;
 
-      // this.updateRadii();
+      this.updateRadii();
       this.buildColorLegend();
     };
 

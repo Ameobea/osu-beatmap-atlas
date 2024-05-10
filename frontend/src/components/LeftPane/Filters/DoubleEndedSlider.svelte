@@ -102,15 +102,15 @@
   $: leftLeft = ((value[0] - min) / range) * 100;
   $: rightLeft = ((value[1] - min) / range) * 100;
   $: {
-    if (value[0] <= min) {
+    if (value[0] < min) {
       value[0] = min;
-    } else if (value[0] >= max) {
+    } else if (value[0] > max) {
       value[0] = max;
     }
 
-    if (value[1] <= min) {
+    if (value[1] < min) {
       value[1] = min;
-    } else if (value[1] >= max) {
+    } else if (value[1] > max) {
       value[1] = max;
     }
 
@@ -203,18 +203,16 @@
       ></div>
     </div>
     <span class:bx--slider__range-label={true}>{maxLabel || max}</span>
-    <input
-      type="hidden"
-      id="input-{id}"
-      class:bx--text-input={true}
-      class:bx--slider-text-input={true}
-      {value}
-      aria-labelledby={$$props['aria-label'] ? undefined : labelId}
-      aria-label={$$props['aria-label'] || 'Slider number input'}
-      {disabled}
-      {min}
-      {max}
-      {step}
-    />
   </div>
 </div>
+
+<style lang="css">
+  :global(.bx--slider__range-label) {
+    display: block;
+    margin: 0 !important;
+    min-width: 24px;
+    max-width: 24px;
+    text-align: center;
+    font-size: 13px;
+  }
+</style>
