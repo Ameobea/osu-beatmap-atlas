@@ -36,6 +36,7 @@
   },
   "type": "module",
   "dependencies": {
+    "@m31coding/fuzzy-search": "^1.0.1",
     "@sentry/browser": "^7.112.2",
     "@tanstack/svelte-query": "^5.34.2",
     "d3-axis": "^3.0.0",

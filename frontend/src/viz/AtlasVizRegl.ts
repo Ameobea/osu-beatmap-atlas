@@ -1,7 +1,7 @@
 import { glMatrix, mat3, vec2 } from 'gl-matrix';
 import REGL from 'regl';
 
-import { ColorModeConfigs, type ColorMode } from '$lib';
+import { ColorMode, ColorModeConfigs } from '$lib';
 import { get, writable, type Writable } from 'svelte/store';
 import { getHiscoreIDsForUser, getUserID } from '../api';
 import { buildColorLegend } from '../components/ColorLegend';
@@ -26,6 +26,7 @@ interface Uniforms {
   dpr: number;
   zoomLevel: number;
   alphaReductionStartZoomLevel: number;
+  timeSeconds: number;
 }
 
 interface Attributes {
@@ -42,6 +43,24 @@ export interface FilterState {
   releaseYear: [number, number];
   bpm: [number, number];
   lengthSeconds: [number, number];
+  mods: {
+    nomod: boolean;
+    DT: boolean;
+    HR: boolean;
+    FL: boolean;
+    EZ: boolean;
+  };
+}
+
+export type DataExtents = Omit<FilterState, 'mods'>;
+
+interface FlyToState {
+  globalScoreIx: number;
+  startTime: number;
+  duration: number;
+  startTransformMatrix: mat3;
+  endTransformMatrix: mat3;
+  intervalHandle: number;
 }
 
 glMatrix.setMatrixArrayType(Array);
@@ -63,24 +82,29 @@ export class AtlasVizRegl {
   private canvasHeight = 1;
   private corpus: Corpus | undefined;
   private fullCorpus: Corpus | undefined;
+  private sortedFullCorpus: Corpus | undefined;
   cachedCorpusPositions: number[] = [];
   private curRadii: number[] = [];
   public transformMatrix: mat3;
-  private highlightedScoreIDs: Set<string> | null = null;
+  private highlightedScoreIDs: Writable<Set<string> | null>;
   private hoveredScoreIx: number | null = null;
   public selectedScoreIx: Writable<number | null>;
   private activeUsername: Writable<string | null> = writable(null);
   private activeUserID: Writable<number | null>;
+  private visibleScoreIDs: Writable<Set<string>>;
   private colorLegend: HTMLElement | null = null;
   private activeColorMode: ColorMode;
   private isDestroyed = false;
   private filterState: FilterState;
+  private flyToState: FlyToState | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
     initialColorMode: ColorMode,
     selectedScoreIx: Writable<number | null>,
     activeUserID: Writable<number | null>,
+    visibleScoreIDs: Writable<Set<string>>,
+    highlightedScoreIDs: Writable<Set<string> | null>,
     filterState: FilterState,
     onCanvasClick: () => void,
     initialTransformMatrix?: mat3
@@ -89,6 +113,8 @@ export class AtlasVizRegl {
     this.activeColorMode = initialColorMode;
     this.selectedScoreIx = selectedScoreIx;
     this.activeUserID = activeUserID;
+    this.visibleScoreIDs = visibleScoreIDs;
+    this.highlightedScoreIDs = highlightedScoreIDs;
     this.filterState = filterState;
     this.canvasWidth = canvas.clientWidth;
     this.canvasHeight = canvas.clientHeight;
@@ -156,6 +182,7 @@ export class AtlasVizRegl {
         dpr: adjustedDPR,
         zoomLevel: () => Math.log(this.transformMatrix[0] * this.canvasWidth),
         alphaReductionStartZoomLevel: () => 4.6 - (this.canvasWidth <= 600 ? 0.4 : 0),
+        timeSeconds: () => performance.now() / 1000,
       },
       count: regl.prop<Props, 'count'>('count'),
       primitive: 'points',
@@ -190,7 +217,8 @@ export class AtlasVizRegl {
 
     const lastUserHiscoreIDs = localStorage.getItem('lastUserHiscoreIDs');
     if (lastUserHiscoreIDs) {
-      this.highlightedScoreIDs = new Set(JSON.parse(lastUserHiscoreIDs));
+      this.highlightedScoreIDs.set(new Set(JSON.parse(lastUserHiscoreIDs)));
+      this.sortedFullCorpus = undefined;
     }
     this.updateData();
 
@@ -202,24 +230,26 @@ export class AtlasVizRegl {
 
   public setColorMode(colorMode: ColorMode) {
     this.activeColorMode = colorMode;
-    this.updateData();
+    this.updateData(true);
   }
 
-  private computePointRadius(selectedScoreIx: number | null, scoreIx: number): number {
+  private get scaleFactor(): number {
+    const zoomLevel = Math.log(this.transformMatrix[0] * this.canvasWidth);
+    return clamp(zoomLevel, 3, 9) * 0.037;
+  }
+
+  private computePointRadius(scaleFactor: number, selectedScoreIx: number | null, scoreIx: number): number {
     const numUsers = this.corpus![scoreIx].numUsers;
     const isHovered = this.hoveredScoreIx === scoreIx;
     const isSelected = selectedScoreIx === scoreIx;
 
     const baseRadius = 12 + Math.log(numUsers) * 9 + numUsers * 0.0016;
-    // TODO: precompute zoom level and scale factor
-    const zoomLevel = Math.log(this.transformMatrix[0] * this.canvasWidth);
-    const scaleFactor = clamp(zoomLevel, 3, 9) * 0.037;
     let radius = Math.max(baseRadius * scaleFactor, 4.2);
     if (isHovered && !isSelected) {
       radius += clamp(0.4 * radius, 8, 22);
     }
     if (isSelected) {
-      radius += clamp(0.6 * radius, 12, 26);
+      radius += clamp(0.8 * radius, 18, 36);
     }
     return radius;
   }
@@ -228,7 +258,8 @@ export class AtlasVizRegl {
     if (!username) {
       this.activeUsername.set(null);
       this.activeUserID.set(null);
-      this.highlightedScoreIDs = null;
+      this.highlightedScoreIDs.set(null);
+      this.sortedFullCorpus = undefined;
       this.updateData();
       return;
     }
@@ -249,7 +280,8 @@ export class AtlasVizRegl {
 
         this.activeUsername.set(username);
         localStorage.setItem('lastUserHiscoreIDs', JSON.stringify(Array.from(scoreIDs)));
-        this.highlightedScoreIDs = scoreIDs;
+        this.highlightedScoreIDs.set(scoreIDs);
+        this.sortedFullCorpus = undefined;
         this.updateData();
       })
       .catch((err) => {
@@ -265,7 +297,8 @@ export class AtlasVizRegl {
 
     const oldLength = this.curRadii.length;
     const selectedScoreIx = get(this.selectedScoreIx);
-    this.curRadii = this.corpus.map((_d, i) => this.computePointRadius(selectedScoreIx, i));
+    const scaleFactor = this.scaleFactor;
+    this.curRadii = this.corpus.map((_d, i) => this.computePointRadius(scaleFactor, selectedScoreIx, i));
     if (oldLength !== this.curRadii.length) {
       this.props.radii.destroy();
       this.props.radii = this.regl.buffer(this.curRadii);
@@ -280,11 +313,14 @@ export class AtlasVizRegl {
     }
 
     const datum = this.corpus[filteredScoreIx];
+    if (!datum) {
+      return null;
+    }
     const globalIx = this.fullCorpus.findIndex((d) => d.scoreID === datum.scoreID);
     return globalIx === -1 ? null : globalIx;
   }
 
-  private buildColorLegend() {
+  private buildColorLegend(redraw = true) {
     const {
       explicitMinVal,
       explicitMaxVal,
@@ -297,54 +333,116 @@ export class AtlasVizRegl {
     } = ColorModeConfigs[this.activeColorMode];
     const colorizeDatum = (d: ScoreMetadata) => {
       const scaled = (getValue(d) - minVal) / (maxVal - minVal);
-      return colorMapper(scaled);
+      return colorMapper(Number.isFinite(scaled) ? scaled : 0);
     };
     if (!this.corpus) {
       return colorizeDatum;
     }
 
-    const [computedMinVal, computedMaxVal] = this.corpus.reduce(
-      ([min, max], d) => [Math.min(min, getValue(d)), Math.max(max, getValue(d))],
-      [Infinity, -Infinity]
-    );
-    const minVal = explicitMinVal ?? computedMinVal;
-    const maxVal = explicitMaxVal ?? computedMaxVal;
-
-    this.colorLegend?.remove();
-    this.colorLegend = buildColorLegend(
-      (n: number) => {
-        const scaled = (n - minVal) / (maxVal - minVal);
-        return colorMapper(scaled);
-      },
-      {
-        heightPx: 32,
-        widthPx: Math.min(340, this.canvas.clientWidth - 97),
-        maxVal,
-        minVal,
-        title,
-        tickCount,
-        tickFormat,
-        tickValues,
+    const [computedMinVal, computedMaxVal] =
+      typeof explicitMinVal !== 'number' || typeof explicitMaxVal !== 'number'
+        ? this.corpus.reduce(
+            ([min, max], d) => [Math.min(min, getValue(d)), Math.max(max, getValue(d))],
+            [Infinity, -Infinity]
+          )
+        : [explicitMinVal, explicitMaxVal];
+    const minVal = (() => {
+      const minVal = explicitMinVal ?? computedMinVal;
+      switch (this.activeColorMode) {
+        case ColorMode.AimSpeedRatio:
+          return Math.max(this.filterState.aimSpeedRatio[0], minVal);
+        case ColorMode.Mods:
+          break;
+        case ColorMode.AveragePP:
+          return Math.max(this.filterState.pp[0], minVal);
+        case ColorMode.ReleaseYear:
+          return Math.max(this.filterState.releaseYear[0], minVal);
+        case ColorMode.StarRating:
+          return Math.max(this.filterState.stars[0], minVal);
+        case ColorMode.Length:
+          return Math.max(this.filterState.lengthSeconds[0], minVal);
       }
-    );
-    this.canvas.parentElement?.appendChild(this.colorLegend);
+      return minVal;
+    })();
+    const maxVal = (() => {
+      const maxVal = explicitMaxVal ?? computedMaxVal;
+      switch (this.activeColorMode) {
+        case ColorMode.AimSpeedRatio:
+          return clamp(minVal, this.filterState.aimSpeedRatio[1], maxVal);
+        case ColorMode.Mods:
+          break;
+        case ColorMode.AveragePP:
+          return clamp(minVal, this.filterState.pp[1], maxVal);
+        case ColorMode.ReleaseYear:
+          return clamp(minVal, this.filterState.releaseYear[1], maxVal);
+        case ColorMode.StarRating:
+          return clamp(minVal, this.filterState.stars[1], maxVal);
+        case ColorMode.Length:
+          return clamp(minVal, this.filterState.lengthSeconds[1], maxVal);
+      }
+      return explicitMaxVal ?? computedMaxVal;
+    })();
+
+    const tickValuesValid = tickValues?.every((v) => v >= minVal && v <= maxVal);
+
+    if (redraw) {
+      this.colorLegend?.remove();
+      this.colorLegend = buildColorLegend(
+        (n: number) => {
+          const scaled = (n - minVal) / (maxVal - minVal);
+          return colorMapper(Number.isFinite(scaled) ? scaled : 0);
+        },
+        {
+          heightPx: 32,
+          widthPx: Math.min(340, this.canvas.clientWidth - 97),
+          maxVal,
+          minVal,
+          title,
+          tickCount,
+          tickFormat,
+          tickValues: tickValuesValid ? tickValues : undefined,
+        }
+      );
+      this.canvas.parentElement?.appendChild(this.colorLegend);
+    }
 
     return colorizeDatum;
   }
 
-  private updateData() {
+  private updateData(skipRadiiUpdate = false) {
     const fetchedCorpus = get(GlobalCorpus);
     if (fetchedCorpus.status !== 'loaded') {
       return;
     }
 
+    const highlightedScoreIDs = get(this.highlightedScoreIDs);
     this.fullCorpus = fetchedCorpus.data;
+    if (!this.sortedFullCorpus) {
+      this.sortedFullCorpus = [...this.fullCorpus];
+      // Sort the corpus to put highlighted scores first and then by number of users so that smaller
+      // circles are drawn on top of larger circles
+      this.sortedFullCorpus.sort(
+        highlightedScoreIDs
+          ? (a, b) => {
+              const aIsHighlighted = highlightedScoreIDs.has(a.scoreID);
+              const bIsHighlighted = highlightedScoreIDs.has(b.scoreID);
+              if (aIsHighlighted && !bIsHighlighted) {
+                return 1;
+              } else if (!aIsHighlighted && bIsHighlighted) {
+                return -1;
+              } else {
+                return b.numUsers - a.numUsers;
+              }
+            }
+          : (a, b) => b.numUsers - a.numUsers
+      );
+    }
 
     const oldSelectedScoreIx = get(this.selectedScoreIx);
     const oldSelected = oldSelectedScoreIx !== null ? this.corpus?.[oldSelectedScoreIx] : null;
     const oldHoveredScoreIx = this.hoveredScoreIx;
     const oldHovered = oldHoveredScoreIx !== null ? this.corpus?.[oldHoveredScoreIx] : null;
-    this.corpus = fetchedCorpus.data.filter((d) => {
+    this.corpus = this.sortedFullCorpus.filter((d) => {
       const pp = d.averagePp;
       const stars = d.starRating;
       const aimSpeedRatio = d.aimSpeedRatio;
@@ -366,31 +464,18 @@ export class AtlasVizRegl {
         lengthSeconds <= this.filterState.lengthSeconds[1]
       );
     });
+    this.visibleScoreIDs.set(new Set(this.corpus.map((d) => d.scoreID)));
 
     this.props.positions.destroy();
     this.props.colors.destroy();
     this.props.alphaMultipliers.destroy();
 
-    // Sort the corpus to put highlighted scores first and then by number of users so that smaller
-    // circles are drawn on top of larger circles
-    const highlightedScoreIDs = this.highlightedScoreIDs;
-
-    this.corpus.sort(
-      highlightedScoreIDs
-        ? (a, b) => {
-            const aIsHighlighted = highlightedScoreIDs.has(a.scoreID);
-            const bIsHighlighted = highlightedScoreIDs.has(b.scoreID);
-            if (aIsHighlighted && !bIsHighlighted) {
-              return 1;
-            } else if (!aIsHighlighted && bIsHighlighted) {
-              return -1;
-            } else {
-              return b.numUsers - a.numUsers;
-            }
-          }
-        : (a, b) => b.numUsers - a.numUsers
-    );
-    this.cachedCorpusPositions = this.corpus.flatMap((d) => d.position);
+    this.cachedCorpusPositions = new Array(this.corpus.length * 2);
+    for (let i = 0; i < this.corpus.length; i++) {
+      const pos = this.corpus[i].position;
+      this.cachedCorpusPositions[i * 2] = pos[0];
+      this.cachedCorpusPositions[i * 2 + 1] = pos[1];
+    }
 
     const newSelectedScoreIx = this.corpus.findIndex((d) => d === oldSelected);
     this.selectedScoreIx.set(newSelectedScoreIx === -1 ? null : newSelectedScoreIx);
@@ -399,7 +484,10 @@ export class AtlasVizRegl {
 
     this.props.count = this.corpus.length;
     this.props.positions = this.regl.buffer(this.corpus.map((d) => d.position));
-    this.updateRadii();
+
+    if (!skipRadiiUpdate) {
+      this.updateRadii();
+    }
 
     const colorMapper = this.buildColorLegend();
 
@@ -414,11 +502,67 @@ export class AtlasVizRegl {
 
   public setFilterState(filterState: FilterState) {
     this.filterState = filterState;
-    this.updateData();
+    this.updateData(false);
   }
 
-  private mouseToWorld = (x: number, y: number): vec2 => {
-    const invertedMatrix = mat3.invert(mat3.create(), this.transformMatrix);
+  public selectAndFlyToScore(globalScoreIx: number) {
+    if (!this.fullCorpus || !this.corpus) {
+      return;
+    }
+    const datum = this.fullCorpus[globalScoreIx];
+    const filteredScoreIx = this.corpus.findIndex((d) => d.originalIx === globalScoreIx);
+    if (filteredScoreIx !== -1) {
+      this.selectedScoreIx.set(filteredScoreIx);
+    }
+
+    if (this.flyToState) {
+      cancelAnimationFrame(this.flyToState.intervalHandle);
+      this.flyToState = null;
+    }
+
+    const startTransformMatrix = mat3.clone(this.transformMatrix);
+    const startTime = performance.now();
+    const duration = 600;
+
+    const endTransformMatrix = mat3.clone(this.transformMatrix);
+
+    const curZoomLevel = Math.log(this.transformMatrix[0] * this.canvasWidth);
+    const desiredZoomLevel = mix(5.75, curZoomLevel, 0.1);
+    const scaleFactor = Math.exp(desiredZoomLevel - curZoomLevel);
+    mat3.scale(endTransformMatrix, endTransformMatrix, [scaleFactor, scaleFactor]);
+
+    const screenCenterPosWorld = this.mouseToWorld(this.canvasWidth / 2, this.canvasHeight / 2, endTransformMatrix);
+    const targetPosWorld = datum.position;
+    const translation = vec2.sub(vec2.create(), screenCenterPosWorld, targetPosWorld);
+    mat3.translate(endTransformMatrix, endTransformMatrix, translation);
+
+    const tick = () => {
+      const now = performance.now();
+      const elapsed = now - startTime;
+      if (elapsed >= duration) {
+        this.transformMatrix = endTransformMatrix;
+        this.flyToState = null;
+        cancelAnimationFrame(intervalHandle);
+        return;
+      }
+
+      const t = elapsed / duration;
+      // mat3.lerp doesn't exist; have to do it manually
+      for (let i = 0; i < 9; i++) {
+        this.transformMatrix[i] = startTransformMatrix[i] * (1 - t) + endTransformMatrix[i] * t;
+      }
+
+      this.updateRadii();
+
+      this.flyToState!.intervalHandle = requestAnimationFrame(tick);
+    };
+    const intervalHandle = requestAnimationFrame(tick);
+
+    this.flyToState = { globalScoreIx, startTime, duration, startTransformMatrix, endTransformMatrix, intervalHandle };
+  }
+
+  private mouseToWorld = (x: number, y: number, transformMatrix = this.transformMatrix): vec2 => {
+    const invertedMatrix = mat3.invert(mat3.create(), transformMatrix);
     const viewportX = (x / this.canvasWidth) * 2 - 1;
     const viewportY = 1 - (y / this.canvasHeight) * 2;
 
@@ -465,7 +609,7 @@ export class AtlasVizRegl {
 
   private updatePointSize(i: number) {
     const selectedScoreIx = get(this.selectedScoreIx);
-    const newRadius = this.computePointRadius(selectedScoreIx, i);
+    const newRadius = this.computePointRadius(this.scaleFactor, selectedScoreIx, i);
     this.curRadii[i] = newRadius;
     this.props.radii.subdata([newRadius], i * 4);
   }
@@ -665,12 +809,12 @@ export class AtlasVizRegl {
 
       if (oldHoveredScoreIx !== this.hoveredScoreIx) {
         if (this.hoveredScoreIx !== null) {
-          const newRadius = this.computePointRadius(get(this.selectedScoreIx), this.hoveredScoreIx);
+          const newRadius = this.computePointRadius(this.scaleFactor, get(this.selectedScoreIx), this.hoveredScoreIx);
           this.curRadii[this.hoveredScoreIx] = newRadius;
           this.props.radii.subdata([newRadius], this.hoveredScoreIx * 4);
         }
         if (oldHoveredScoreIx !== null) {
-          const newRadius = this.computePointRadius(get(this.selectedScoreIx), oldHoveredScoreIx);
+          const newRadius = this.computePointRadius(this.scaleFactor, get(this.selectedScoreIx), oldHoveredScoreIx);
           this.curRadii[oldHoveredScoreIx] = newRadius;
           this.props.radii.subdata([newRadius], oldHoveredScoreIx * 4);
         }

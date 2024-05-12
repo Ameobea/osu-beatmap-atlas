@@ -3,12 +3,18 @@
   import ChevronLeft from 'carbon-icons-svelte/lib/ChevronLeft.svelte';
 
   import type { Writable } from 'svelte/store';
-  import type { FilterState } from '../../viz/AtlasVizRegl';
+  import type { Corpus } from '../../corpus';
+  import type { DataExtents, FilterState } from '../../viz/AtlasVizRegl';
+  import BeatmapSearch from '../BeatmapSearch.svelte';
   import Filters from './Filters/Filters.svelte';
 
   export let collapseSidebar: () => void;
   export let filterState: Writable<FilterState>;
-  export let dataExtents: FilterState;
+  export let dataExtents: DataExtents;
+  export let corpus: Corpus;
+  export let onBeatmapSelect: (globalScoreIx: number) => void;
+  export let visibleScoreIDs: Set<string>;
+  export let highlightedScoreIDs: Set<string>;
 </script>
 
 <div class="root">
@@ -22,6 +28,7 @@
       on:click={collapseSidebar}
     />
   </div>
+  <BeatmapSearch {corpus} onSelect={onBeatmapSelect} {visibleScoreIDs} {highlightedScoreIDs} />
   <Filters {filterState} {dataExtents} />
 </div>
 
@@ -38,5 +45,6 @@
     padding: 4px 6px 4px 4px;
     border-right: 1px solid #64646488;
     border-top: 1px solid #64646488;
+    min-width: 300px;
   }
 </style>

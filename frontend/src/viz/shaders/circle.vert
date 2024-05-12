@@ -11,6 +11,7 @@ uniform vec2 selectedCirclePosition;
 uniform float dpr;
 uniform float zoomLevel;
 uniform float alphaReductionStartZoomLevel;
+uniform float timeSeconds;
 
 varying float vBorderWidth;
 varying float vBorderFade;
@@ -50,6 +51,8 @@ void main() {
     float centerAlphaMultiplier = alphaMultiplier;
     if (isSelected) {
         centerAlphaMultiplier = max(centerAlphaMultiplier, 0.9);
+        float twinkleMultiplier = 0.5 + 0.5 * sin(timeSeconds * 4.);
+        centerAlphaMultiplier *= mix(twinkleMultiplier, 1., 0.5);
         vRimAlpha = 1.;
     } else if (isHovered) {
         centerAlphaMultiplier = max(centerAlphaMultiplier, 0.75);
@@ -63,4 +66,7 @@ void main() {
     }
     vCenterAlpha *= farZoomAlphaMultiplier;
     vRimAlpha *= farZoomAlphaMultiplier;
+
+    vRimAlpha = max(vRimAlpha, vCenterAlpha);
+    vCenterAlpha = min(vCenterAlpha, vRimAlpha * 0.8);
 }

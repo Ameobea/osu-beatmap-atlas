@@ -79,7 +79,7 @@
   .backdrop {
     position: absolute;
     bottom: 0;
-    left: 0;
+    left: 303px;
     width: calc(min(100vw, 900px));
     aspect-ratio: 900 / 250;
   }
@@ -144,6 +144,11 @@
   }
 
   @media (max-width: 600px) {
+    .root,
+    .backdrop {
+      left: 0;
+    }
+
     .root {
       font-size: 13px;
     }

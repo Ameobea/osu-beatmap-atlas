@@ -4,7 +4,7 @@
   import { onDestroy } from 'svelte';
   import { writable, type Writable } from 'svelte/store';
   import { GlobalCorpus, type ScoreMetadata } from '../corpus';
-  import { AtlasVizRegl, type FilterState } from '../viz/AtlasVizRegl';
+  import { AtlasVizRegl, type DataExtents, type FilterState } from '../viz/AtlasVizRegl';
   import ConfigureColors from './ConfigureColors.svelte';
   import CollapsedLeftPane from './LeftPane/CollapsedLeftPane.svelte';
   import LeftPane from './LeftPane/LeftPane.svelte';
@@ -18,7 +18,7 @@
   const activeUserID = writable<number | null>(null);
   const configureColorsOpen = writable(false);
 
-  const computeDataExtents = (data: ScoreMetadata[]): FilterState => {
+  const computeDataExtents = (data: ScoreMetadata[]): DataExtents => {
     const pp = data.map((d) => d.averagePp);
     const stars = data.map((d) => d.starRating);
     const aimSpeedRatio = data.map((d) => d.aimSpeedRatio);
@@ -26,14 +26,6 @@
     const releaseYear = data.map((d) => d.releaseYear);
     const lengthSeconds = data.map((d) => d.realLengthSeconds);
 
-    console.log({
-      pp: [Math.min(...pp), Math.max(...pp)],
-      stars: [Math.min(...stars), Math.max(...stars)],
-      aimSpeedRatio: [Math.min(...aimSpeedRatio), Math.max(...aimSpeedRatio)],
-      bpm: [Math.min(...bpm), Math.max(...bpm)],
-      releaseYear: [Math.min(...releaseYear), Math.max(...releaseYear)],
-      lengthSeconds: [Math.min(...lengthSeconds), Math.max(...lengthSeconds)],
-    });
     return {
       pp: [Math.min(...pp), Math.max(...pp)],
       stars: [Math.min(...stars), Math.max(...stars)],
@@ -44,26 +36,56 @@
     };
   };
 
-  let curColorMode = writable(ColorMode.StarRating);
-  const filterState: Writable<FilterState> = writable({
+  const buildDefaultFilterState = (): FilterState => ({
     pp: [70, 1400],
     stars: [3, 10],
     aimSpeedRatio: [0.85, 1.6],
     bpm: [20, 300],
     lengthSeconds: [10, 6000],
     releaseYear: [2008, 2024],
+    mods: {
+      nomod: false,
+      DT: false,
+      EZ: false,
+      FL: false,
+      HR: false,
+    },
   });
-  let dataExtents: FilterState | null = null;
+
+  const usedSavedFilterState = browser && localStorage.getItem('filter-state');
+  let curColorMode = writable(ColorMode.StarRating);
+  const visibleScoreIDs = writable<Set<string>>(new Set());
+  const highlightedScoreIDs = writable<Set<string>>(new Set());
+  const filterState: Writable<FilterState> = writable(
+    browser && localStorage.getItem('filter-state')
+      ? JSON.parse(localStorage.getItem('filter-state')!)
+      : buildDefaultFilterState()
+  );
+  let dataExtents: DataExtents | null = null;
   let viz: AtlasVizRegl | null = null;
   let leftPaneCollapsed = false;
 
   $: if ($GlobalCorpus.status === 'loaded') {
     dataExtents = computeDataExtents($GlobalCorpus.data);
-    $filterState = JSON.parse(JSON.stringify(dataExtents));
+    if (!usedSavedFilterState) {
+      $filterState = JSON.parse(JSON.stringify(dataExtents));
+    }
   }
 
   $: viz?.setColorMode($curColorMode);
   $: viz?.setFilterState($filterState);
+
+  // save filter state to local storage, but debounced to avoid excessive writes
+  let saveFilterStateTimeout: number | null = null;
+  $: if (browser) {
+    if (saveFilterStateTimeout) {
+      clearTimeout(saveFilterStateTimeout);
+    }
+    saveFilterStateTimeout = setTimeout(
+      () => void localStorage.setItem('filter-state', JSON.stringify($filterState)),
+      500
+    );
+  }
 
   $: selectedScoreGlobalIx = $selectedScoreIx !== null ? viz?.getGlobalScoreIx($selectedScoreIx) ?? null : null;
 
@@ -80,6 +102,8 @@
       $curColorMode,
       selectedScoreIx,
       activeUserID,
+      visibleScoreIDs,
+      highlightedScoreIDs,
       $filterState,
       handleCanvasClick,
       (window as any).lastTransformationMatrix
@@ -103,7 +127,7 @@
     style="width: {windowWidth}px; height: {windowHeight}px; touch-action: none; user-select: none;"
     use:renderViz
   ></canvas>
-  {#if windowWidth >= 600 && dataExtents}
+  {#if windowWidth >= 600 && dataExtents && $GlobalCorpus.status === 'loaded'}
     {#if leftPaneCollapsed}
       <CollapsedLeftPane
         expandSidebar={() => {
@@ -117,6 +141,10 @@
         }}
         {filterState}
         {dataExtents}
+        corpus={$GlobalCorpus.data}
+        onBeatmapSelect={(globalScoreIx) => viz?.selectAndFlyToScore(globalScoreIx)}
+        visibleScoreIDs={$visibleScoreIDs}
+        highlightedScoreIDs={$highlightedScoreIDs}
       />
     {/if}
   {/if}

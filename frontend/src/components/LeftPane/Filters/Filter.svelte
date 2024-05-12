@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Slider } from 'carbon-components-svelte';
   import { genRandomStringID } from '../../../util';
   import DoubleEndedSlider from './DoubleEndedSlider.svelte';
 
@@ -8,6 +9,10 @@
   export let label: string;
   export let step = 1;
   export let formatLabel: ((v: number) => string) | undefined = undefined;
+  /**
+   * Used to force the import of the carbon-components-svelte slider which is used in the DoubleEndedSlider component.
+   */
+  export let neverSetThis: boolean = false;
 
   let id = genRandomStringID();
 
@@ -33,6 +38,9 @@
 <div class="root">
   <label for={id}>{label}</label>
   <DoubleEndedSlider {id} {min} {max} {step} bind:value />
+  {#if neverSetThis}
+    <Slider />
+  {/if}
   <div class="value-display">{formatValue(value[0])} - {formatValue(value[1])}</div>
 </div>
 

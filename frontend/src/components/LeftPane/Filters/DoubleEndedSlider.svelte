@@ -33,15 +33,6 @@
   /** Set an id for the slider div element */
   export let id = 'ccs-' + Math.random().toString(36);
 
-  /**
-   * Specify the label text.
-   * Alternatively, use the "labelText" slot (e.g., `<span slot="labelText">...</span>`)
-   */
-  export let labelText = '';
-
-  /** Set to `true` to visually hide the label text */
-  export let hideLabel: boolean = false;
-
   let trackRef: HTMLDivElement | null = null as HTMLDivElement | null;
   let dragging: false | 'left' | 'right' = false;
   let holding: false | 'left' | 'right' = false;
@@ -151,18 +142,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <!-- svelte-ignore a11y_mouse_events_have_key_events -->
 <div class:bx--form-item={true} {...$$restProps}>
-  <label
-    for={id}
-    id={labelId}
-    class:bx--label={true}
-    class:bx--label--disabled={disabled}
-    class:bx--visually-hidden={hideLabel}
-  >
-    <slot name="labelText">
-      {labelText}
-    </slot>
-  </label>
-  <div class:bx--slider-container={true} style:width={fullWidth ? '100%' : undefined}>
+  <div {id} class:bx--slider-container={true} style:width={fullWidth ? '100%' : undefined}>
     <span class:bx--slider__range-label={true}>{minLabel || min}</span>
     <div
       role="presentation"
@@ -183,7 +163,6 @@
         aria-valuemin={min}
         aria-valuenow={value[0]}
         aria-labelledby={labelId}
-        {id}
       ></div>
       <div
         role="slider"
@@ -194,7 +173,6 @@
         aria-valuemin={min}
         aria-valuenow={value[0]}
         aria-labelledby={labelId}
-        {id}
       ></div>
       <div bind:this={trackRef} class:bx--slider__track={true}></div>
       <div

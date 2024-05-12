@@ -1,10 +1,10 @@
 <script lang="ts">
   import type { Writable } from 'svelte/store';
-  import type { FilterState } from '../../../viz/AtlasVizRegl';
+  import type { DataExtents, FilterState } from '../../../viz/AtlasVizRegl';
   import Filter from './Filter.svelte';
 
   export let filterState: Writable<FilterState>;
-  export let dataExtents: FilterState;
+  export let dataExtents: DataExtents;
 
   const floorWithPrecision = (value: number, precision: number) => {
     const multiplier = 10 ** precision;

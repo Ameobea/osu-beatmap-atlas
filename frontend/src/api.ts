@@ -8,7 +8,7 @@ export const fetchCorpus = async () => {
 };
 
 export const getHiscoreIDsForUser = async (username: string): Promise<Set<string>> => {
-  const url = `https://osutrack-api.ameo.dev/hiscores?user=${username}&mode=0&userMode=username`;
+  const url = `https://osutrack-api.ameo.dev/hiscores?user=${username.trim()}&mode=0&userMode=username`;
   const scoreIDs = await fetch(url)
     .then((response) => response.json())
     .then((data) => data.map((entry: any) => `${entry.beatmap_id}_${parseModsBitmask(entry.mods)}`));
@@ -16,7 +16,7 @@ export const getHiscoreIDsForUser = async (username: string): Promise<Set<string
 };
 
 export const getUserID = async (username: string): Promise<number> => {
-  const url = `${PUBLIC_API_BRIDGE_BASE_URL}/users/${username}/id?mode=osu`;
+  const url = `${PUBLIC_API_BRIDGE_BASE_URL}/users/${username.trim()}/id?mode=osu`;
   return fetch(url).then((response) => response.json());
 };
 
