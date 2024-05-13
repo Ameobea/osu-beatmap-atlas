@@ -1,6 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { ColorMode } from '$lib';
+  import { LocalStorage } from 'carbon-components-svelte';
   import { onDestroy } from 'svelte';
   import { writable, type Writable } from 'svelte/store';
   import { GlobalCorpus, type ScoreMetadata } from '../corpus';
@@ -8,7 +9,7 @@
   import ConfigureColors from './ConfigureColors.svelte';
   import CollapsedLeftPane from './LeftPane/CollapsedLeftPane.svelte';
   import LeftPane from './LeftPane/LeftPane.svelte';
-  import SelectedBeatmapInfo from './SelectedBeatmapInfo.svelte';
+  import SelectedBeatmapInfo from './SelectedBeatmapInfo/SelectedBeatmapInfo.svelte';
   import TopControls from './TopControls.svelte';
 
   let windowWidth = 0;
@@ -119,6 +120,8 @@
 </script>
 
 <svelte:window bind:innerWidth={windowWidth} bind:innerHeight={windowHeight} />
+
+<LocalStorage bind:value={$curColorMode} key="color-mode" />
 
 {#if windowWidth > 0 && windowHeight > 0}
   <canvas

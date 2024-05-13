@@ -49,14 +49,42 @@ interface UserScoreForBeatmap {
 export const getBestUserScoreForBeatmap = async (
   userID: number,
   beatmapID: number,
-  modsString: string
+  modString: string
 ): Promise<UserScoreForBeatmap | null> => {
-  const url = `${PUBLIC_API_BRIDGE_BASE_URL}/users/${userID}/beatmaps/${beatmapID}/best?mode=osu&mods=${modsString}`;
+  const url = `${PUBLIC_API_BRIDGE_BASE_URL}/users/${userID}/beatmaps/${beatmapID}/best?mode=osu&mods=${modString}`;
   return fetch(url)
     .then((response) => response.json())
-    .then((res) => ({
-      ...res,
-      started_at: res.started_at ? new Date(res.started_at) : null,
-      ended_at: res.ended_at ? new Date(res.ended_at) : null,
-    }));
+    .then((res) =>
+      res
+        ? {
+            ...res,
+            started_at: res.started_at ? new Date(res.started_at) : null,
+            ended_at: res.ended_at ? new Date(res.ended_at) : null,
+          }
+        : null
+    );
+};
+
+export interface SimulatePlayParams {
+  mods?: string;
+  max_combo?: number;
+  acc?: number;
+  misses?: number;
+  n300?: number;
+  n100?: number;
+  n50?: number;
+}
+
+export const batchSimulatePlay = async (beatmapID: number, simParams: SimulatePlayParams[]): Promise<number[]> => {
+  const url = `${PUBLIC_API_BRIDGE_BASE_URL}/beatmaps/${beatmapID}/simulate/batch`;
+  const body = {
+    beatmap_id: beatmapID,
+    params: simParams,
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  }).then((response) => response.json());
+  return res.pp;
 };

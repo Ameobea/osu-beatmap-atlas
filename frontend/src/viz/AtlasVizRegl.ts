@@ -346,41 +346,41 @@ export class AtlasVizRegl {
             [Infinity, -Infinity]
           )
         : [explicitMinVal, explicitMaxVal];
-    const minVal = (() => {
-      const minVal = explicitMinVal ?? computedMinVal;
+
+    const [filterMin, filterMax] = ((): [number, number] => {
       switch (this.activeColorMode) {
         case ColorMode.AimSpeedRatio:
-          return Math.max(this.filterState.aimSpeedRatio[0], minVal);
+          return this.filterState.aimSpeedRatio;
         case ColorMode.Mods:
-          break;
+          return [0, 6];
         case ColorMode.AveragePP:
-          return Math.max(this.filterState.pp[0], minVal);
+          return this.filterState.pp;
         case ColorMode.ReleaseYear:
-          return Math.max(this.filterState.releaseYear[0], minVal);
+          return this.filterState.releaseYear;
         case ColorMode.StarRating:
-          return Math.max(this.filterState.stars[0], minVal);
+          return this.filterState.stars;
         case ColorMode.Length:
-          return Math.max(this.filterState.lengthSeconds[0], minVal);
+          return this.filterState.lengthSeconds;
       }
-      return minVal;
     })();
-    const maxVal = (() => {
-      const maxVal = explicitMaxVal ?? computedMaxVal;
-      switch (this.activeColorMode) {
-        case ColorMode.AimSpeedRatio:
-          return clamp(minVal, this.filterState.aimSpeedRatio[1], maxVal);
-        case ColorMode.Mods:
-          break;
-        case ColorMode.AveragePP:
-          return clamp(minVal, this.filterState.pp[1], maxVal);
-        case ColorMode.ReleaseYear:
-          return clamp(minVal, this.filterState.releaseYear[1], maxVal);
-        case ColorMode.StarRating:
-          return clamp(minVal, this.filterState.stars[1], maxVal);
-        case ColorMode.Length:
-          return clamp(minVal, this.filterState.lengthSeconds[1], maxVal);
+
+    // As a base, use explicit min/max if provided or computed min/max if not
+    //
+    // Then, expand if the filter min is greater than the base max or the filter max is less than the base min
+    const [minVal, maxVal] = ((): [number, number] => {
+      const baseMin = explicitMinVal ?? computedMinVal;
+      const baseMax = explicitMaxVal ?? computedMaxVal;
+
+      const min = Math.max(baseMin, filterMin);
+      const max = Math.min(baseMax, filterMax);
+
+      if (min > baseMax) {
+        return [Math.max(filterMin, computedMinVal), Math.max(filterMax, computedMaxVal)];
+      } else if (max < baseMin) {
+        return [Math.min(filterMin, computedMinVal), Math.min(filterMax, computedMaxVal)];
       }
-      return explicitMaxVal ?? computedMaxVal;
+
+      return [min, max];
     })();
 
     const tickValuesValid = tickValues?.every((v) => v >= minVal && v <= maxVal);
