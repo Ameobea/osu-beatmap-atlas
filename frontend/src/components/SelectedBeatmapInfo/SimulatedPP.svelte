@@ -29,7 +29,7 @@
       }
 
       const pps = await batchSimulatePlay(entry.beatmapId, params);
-      return pps.map((pp, i) => ({ acc: params[i].acc, pp }));
+      return pps ? pps.map((pp, i) => ({ acc: params[i].acc, pp })) : null;
     },
   });
 </script>

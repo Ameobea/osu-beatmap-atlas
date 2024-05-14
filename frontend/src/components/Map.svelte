@@ -59,7 +59,17 @@
   const highlightedScoreIDs = writable<Set<string>>(new Set());
   const filterState: Writable<FilterState> = writable(
     browser && localStorage.getItem('filter-state')
-      ? JSON.parse(localStorage.getItem('filter-state')!)
+      ? (() => {
+          try {
+            const parsed = JSON.parse(localStorage.getItem('filter-state')!) as FilterState;
+            if (!parsed.mods) {
+              parsed.mods = buildDefaultFilterState().mods;
+            }
+            return parsed;
+          } catch (e) {
+            return buildDefaultFilterState();
+          }
+        })()
       : buildDefaultFilterState()
   );
   let dataExtents: DataExtents | null = null;
@@ -76,16 +86,18 @@
   $: viz?.setColorMode($curColorMode);
   $: viz?.setFilterState($filterState);
 
+  const persistFilterState = () => void localStorage.setItem('filter-state', JSON.stringify($filterState));
+  if (browser) {
+    window.onbeforeunload = persistFilterState;
+  }
+
   // save filter state to local storage, but debounced to avoid excessive writes
   let saveFilterStateTimeout: number | null = null;
   $: if (browser) {
     if (saveFilterStateTimeout) {
       clearTimeout(saveFilterStateTimeout);
     }
-    saveFilterStateTimeout = setTimeout(
-      () => void localStorage.setItem('filter-state', JSON.stringify($filterState)),
-      500
-    );
+    saveFilterStateTimeout = setTimeout(persistFilterState, 500);
   }
 
   $: selectedScoreGlobalIx = $selectedScoreIx !== null ? viz?.getGlobalScoreIx($selectedScoreIx) ?? null : null;
@@ -148,11 +160,14 @@
         onBeatmapSelect={(globalScoreIx) => viz?.selectAndFlyToScore(globalScoreIx)}
         visibleScoreIDs={$visibleScoreIDs}
         highlightedScoreIDs={$highlightedScoreIDs}
+        {curColorMode}
       />
     {/if}
   {/if}
   <TopControls onSubmit={(username) => viz?.setActiveUsername(username)} />
-  <ConfigureColors {curColorMode} configuratorOpen={configureColorsOpen} />
+  {#if windowWidth < 600}
+    <ConfigureColors {curColorMode} configuratorOpen={configureColorsOpen} />
+  {/if}
   {#if selectedScoreGlobalIx !== null && $GlobalCorpus.status === 'loaded'}
     <SelectedBeatmapInfo
       corpus={$GlobalCorpus.data}

@@ -278,6 +278,11 @@ export class AtlasVizRegl {
           return;
         }
 
+        if (!scoreIDs) {
+          this.highlightedScoreIDs.set(null);
+          return;
+        }
+
         this.activeUsername.set(username);
         localStorage.setItem('lastUserHiscoreIDs', JSON.stringify(Array.from(scoreIDs)));
         this.highlightedScoreIDs.set(scoreIDs);
@@ -464,6 +469,45 @@ export class AtlasVizRegl {
         lengthSeconds <= this.filterState.lengthSeconds[1]
       );
     });
+    const needsModsFiltering =
+      this.filterState.mods.nomod ||
+      this.filterState.mods.DT ||
+      this.filterState.mods.HR ||
+      this.filterState.mods.FL ||
+      this.filterState.mods.EZ;
+    if (needsModsFiltering) {
+      if (
+        this.filterState.mods.nomod &&
+        !this.filterState.mods.DT &&
+        !this.filterState.mods.HR &&
+        !this.filterState.mods.FL &&
+        !this.filterState.mods.EZ
+      ) {
+        this.corpus = this.corpus.filter((d) => d.modsBitmask === 0);
+      } else {
+        const exactMatch = this.filterState.mods.nomod;
+
+        let bitmask = 0;
+        if (this.filterState.mods.DT) {
+          bitmask |= 64;
+        }
+        if (this.filterState.mods.HR) {
+          bitmask |= 16;
+        }
+        if (this.filterState.mods.FL) {
+          bitmask |= 1024;
+        }
+        if (this.filterState.mods.EZ) {
+          bitmask |= 2;
+        }
+
+        if (exactMatch) {
+          this.corpus = this.corpus.filter((d) => d.modsBitmask === bitmask);
+        } else {
+          this.corpus = this.corpus.filter((d) => (d.modsBitmask & bitmask) === bitmask);
+        }
+      }
+    }
     this.visibleScoreIDs.set(new Set(this.corpus.map((d) => d.scoreID)));
 
     this.props.positions.destroy();

@@ -7,17 +7,26 @@ export const fetchCorpus = async () => {
   return response.arrayBuffer();
 };
 
-export const getHiscoreIDsForUser = async (username: string): Promise<Set<string>> => {
+export const getHiscoreIDsForUser = async (username: string): Promise<Set<string> | null> => {
   const url = `https://osutrack-api.ameo.dev/hiscores?user=${username.trim()}&mode=0&userMode=username`;
-  const scoreIDs = await fetch(url)
-    .then((response) => response.json())
-    .then((data) => data.map((entry: any) => `${entry.beatmap_id}_${parseModsBitmask(entry.mods)}`));
+  const res = await fetch(url);
+  if (!res.ok) {
+    return null;
+  }
+
+  const data = await res.json();
+  const scoreIDs = data.map((entry: any) => `${entry.beatmap_id}_${parseModsBitmask(entry.mods)}`);
   return new Set(scoreIDs);
 };
 
-export const getUserID = async (username: string): Promise<number> => {
+export const getUserID = async (username: string): Promise<number | null> => {
   const url = `${PUBLIC_API_BRIDGE_BASE_URL}/users/${username.trim()}/id?mode=osu`;
-  return fetch(url).then((response) => response.json());
+  const res = await fetch(url);
+  if (!res.ok) {
+    return null;
+  }
+
+  return res.json();
 };
 
 interface UserScoreForBeatmap {
@@ -52,17 +61,21 @@ export const getBestUserScoreForBeatmap = async (
   modString: string
 ): Promise<UserScoreForBeatmap | null> => {
   const url = `${PUBLIC_API_BRIDGE_BASE_URL}/users/${userID}/beatmaps/${beatmapID}/best?mode=osu&mods=${modString}`;
-  return fetch(url)
-    .then((response) => response.json())
-    .then((res) =>
-      res
-        ? {
-            ...res,
-            started_at: res.started_at ? new Date(res.started_at) : null,
-            ended_at: res.ended_at ? new Date(res.ended_at) : null,
-          }
-        : null
-    );
+  const res = await fetch(url);
+  if (!res.ok) {
+    return null;
+  }
+
+  const json = await res.json();
+  if (!json) {
+    return null;
+  }
+
+  return {
+    ...json,
+    started_at: json.started_at ? new Date(json.started_at) : null,
+    ended_at: json.ended_at ? new Date(json.ended_at) : null,
+  };
 };
 
 export interface SimulatePlayParams {
@@ -75,7 +88,10 @@ export interface SimulatePlayParams {
   n50?: number;
 }
 
-export const batchSimulatePlay = async (beatmapID: number, simParams: SimulatePlayParams[]): Promise<number[]> => {
+export const batchSimulatePlay = async (
+  beatmapID: number,
+  simParams: SimulatePlayParams[]
+): Promise<number[] | null> => {
   const url = `${PUBLIC_API_BRIDGE_BASE_URL}/beatmaps/${beatmapID}/simulate/batch`;
   const body = {
     beatmap_id: beatmapID,
@@ -85,6 +101,10 @@ export const batchSimulatePlay = async (beatmapID: number, simParams: SimulatePl
   const res = await fetch(url, {
     method: 'POST',
     body: JSON.stringify(body),
-  }).then((response) => response.json());
-  return res.pp;
+  });
+  if (!res.ok) {
+    return null;
+  }
+  const json = await res.json();
+  return json.pp;
 };

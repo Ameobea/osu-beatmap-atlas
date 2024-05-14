@@ -2,6 +2,7 @@
   import type { Writable } from 'svelte/store';
   import type { DataExtents, FilterState } from '../../../viz/AtlasVizRegl';
   import Filter from './Filter.svelte';
+  import ModsFilter from './ModsFilter.svelte';
 
   export let filterState: Writable<FilterState>;
   export let dataExtents: DataExtents;
@@ -19,6 +20,7 @@
 
 <div class="root">
   <h3>Filters</h3>
+  <ModsFilter bind:state={$filterState.mods} />
   <Filter
     label="Average PP"
     min={Math.floor(dataExtents.pp[0])}

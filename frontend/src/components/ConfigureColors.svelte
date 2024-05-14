@@ -1,7 +1,8 @@
 <script lang="ts">
   import { ColorMode } from '$lib';
-  import { Button, Select, SelectItem } from 'carbon-components-svelte';
+  import { Button } from 'carbon-components-svelte';
   import type { Writable } from 'svelte/store';
+  import ColorModeSelector from './ColorModeSelector.svelte';
 
   export let curColorMode: Writable<ColorMode>;
   export let configuratorOpen: Writable<boolean>;
@@ -22,14 +23,7 @@
   </Button>
   {#if $configuratorOpen}
     <div class="configure-form">
-      <Select labelText="Color By" bind:selected={$curColorMode}>
-        <SelectItem value={ColorMode.StarRating} text="Star Rating" />
-        <SelectItem value={ColorMode.AveragePP} text="Average PP" />
-        <SelectItem value={ColorMode.Mods} text="Mods" />
-        <SelectItem value={ColorMode.AimSpeedRatio} text="Aim/Speed Ratio" />
-        <SelectItem value={ColorMode.ReleaseYear} text="Release Year" />
-        <SelectItem value={ColorMode.Length} text="Length" />
-      </Select>
+      <ColorModeSelector bind:selected={$curColorMode} />
     </div>
   {/if}
 </div>

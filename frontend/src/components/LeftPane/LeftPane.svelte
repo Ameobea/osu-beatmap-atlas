@@ -2,10 +2,12 @@
   import { Button } from 'carbon-components-svelte';
   import ChevronLeft from 'carbon-icons-svelte/lib/ChevronLeft.svelte';
 
+  import type { ColorMode } from '$lib';
   import type { Writable } from 'svelte/store';
   import type { Corpus } from '../../corpus';
   import type { DataExtents, FilterState } from '../../viz/AtlasVizRegl';
   import BeatmapSearch from '../BeatmapSearch.svelte';
+  import ColorModeSelector from '../ColorModeSelector.svelte';
   import Filters from './Filters/Filters.svelte';
 
   export let collapseSidebar: () => void;
@@ -15,6 +17,7 @@
   export let onBeatmapSelect: (globalScoreIx: number) => void;
   export let visibleScoreIDs: Set<string>;
   export let highlightedScoreIDs: Set<string>;
+  export let curColorMode: Writable<ColorMode>;
 </script>
 
 <div class="root">
@@ -28,6 +31,7 @@
       on:click={collapseSidebar}
     />
   </div>
+  <ColorModeSelector bind:selected={$curColorMode} style="margin-top: -24px" />
   <BeatmapSearch {corpus} onSelect={onBeatmapSelect} {visibleScoreIDs} {highlightedScoreIDs} />
   <Filters {filterState} {dataExtents} />
 </div>
