@@ -10,14 +10,25 @@
   import ColorModeSelector from '../ColorModeSelector.svelte';
   import Filters from './Filters/Filters.svelte';
 
-  export let collapseSidebar: () => void;
-  export let filterState: Writable<FilterState>;
-  export let dataExtents: DataExtents;
-  export let corpus: Corpus;
-  export let onBeatmapSelect: (globalScoreIx: number) => void;
-  export let visibleScoreIDs: Set<string>;
-  export let highlightedScoreIDs: Set<string>;
-  export let curColorMode: Writable<ColorMode>;
+  const {
+    collapseSidebar,
+    filterState,
+    dataExtents,
+    corpus,
+    onBeatmapSelect,
+    visibleScoreIDs,
+    highlightedScoreIDs,
+    curColorMode,
+  }: {
+    collapseSidebar: () => void;
+    filterState: Writable<FilterState>;
+    dataExtents: DataExtents;
+    corpus: Corpus;
+    onBeatmapSelect: (globalScoreIx: number) => void;
+    visibleScoreIDs: Set<string>;
+    highlightedScoreIDs: Set<string>;
+    curColorMode: Writable<ColorMode>;
+  } = $props();
 </script>
 
 <div class="root">

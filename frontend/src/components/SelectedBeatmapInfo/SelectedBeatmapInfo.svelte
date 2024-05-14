@@ -3,17 +3,21 @@
   import SimulatedPp from './SimulatedPP.svelte';
   import UserBestPlay from './UserBestPlay.svelte';
 
-  export let corpus: Corpus;
-  export let selectedScoreIx: number;
-  export let activeUserID: number | null;
+  const {
+    corpus,
+    selectedScoreIx,
+    activeUserID,
+  }: { corpus: Corpus; selectedScoreIx: number; activeUserID: number | null } = $props();
 
-  let windowWidth = 0;
+  let windowWidth = $state(0);
 
-  $: entry = corpus[selectedScoreIx];
-  $: coverImageURL = `https://assets.ppy.sh/beatmaps/${entry.beatmapSetID}/covers/cover.jpg`;
-  $: downloadURL = `https://osu.ppy.sh/beatmapsets/${entry.beatmapSetID}/download`;
-  $: osuDirectURL = `osu://b/${entry.beatmapId}`;
-  $: length = `${Math.floor(entry.realLengthSeconds / 60)}:${(entry.realLengthSeconds % 60).toString().padStart(2, '0')}`;
+  const entry = $derived(corpus[selectedScoreIx]);
+  const coverImageURL = $derived(`https://assets.ppy.sh/beatmaps/${entry.beatmapSetID}/covers/cover.jpg`);
+  const downloadURL = $derived(`https://osu.ppy.sh/beatmapsets/${entry.beatmapSetID}/download`);
+  const osuDirectURL = $derived(`osu://b/${entry.beatmapId}`);
+  const length = $derived(
+    `${Math.floor(entry.realLengthSeconds / 60)}:${(entry.realLengthSeconds % 60).toString().padStart(2, '0')}`
+  );
 </script>
 
 <svelte:window bind:innerWidth={windowWidth} />

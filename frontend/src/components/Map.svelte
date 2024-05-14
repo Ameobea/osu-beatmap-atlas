@@ -53,15 +53,15 @@
     },
   });
 
-  const usedSavedFilterState = browser && localStorage.getItem('filter-state');
+  const usedSavedFilterState: string | null = (browser && localStorage.getItem('filter-state')) || null;
   let curColorMode = writable(ColorMode.StarRating);
   const visibleScoreIDs = writable<Set<string>>(new Set());
   const highlightedScoreIDs = writable<Set<string>>(new Set());
   const filterState: Writable<FilterState> = writable(
-    browser && localStorage.getItem('filter-state')
+    usedSavedFilterState
       ? (() => {
           try {
-            const parsed = JSON.parse(localStorage.getItem('filter-state')!) as FilterState;
+            const parsed = JSON.parse(usedSavedFilterState) as FilterState;
             if (!parsed.mods) {
               parsed.mods = buildDefaultFilterState().mods;
             }

@@ -7,17 +7,28 @@
   import { type Corpus } from '../corpus';
   import type { SearchDatum } from './beatmapSearchWorker.worker';
 
-  export let corpus: Corpus;
-  export let onSelect: (globalScoreIx: number) => void;
-  export let visibleScoreIDs: Set<string>;
-  export let highlightedScoreIDs: Set<string>;
+  const {
+    corpus,
+    onSelect,
+    visibleScoreIDs,
+    highlightedScoreIDs,
+  }: {
+    corpus: Corpus;
+    onSelect: (globalScoreIx: number) => void;
+    visibleScoreIDs: Set<string>;
+    highlightedScoreIDs: Set<string>;
+  } = $props();
 
-  $: prettyNames = corpus.map((d) => `${d.beatmapName} [${d.difficultyName}]${d.modString ? ` +${d.modString}` : ''}`);
-  $: indexingData = corpus.map(
-    (d, i): SearchDatum => ({
-      originalIx: d.originalIx,
-      data: [d.beatmapName, d.difficultyName, d.mapperName, prettyNames[i]],
-    })
+  const prettyNames = $derived(
+    corpus.map((d) => `${d.beatmapName} [${d.difficultyName}]${d.modString ? ` +${d.modString}` : ''}`)
+  );
+  const indexingData = $derived(
+    corpus.map(
+      (d, i): SearchDatum => ({
+        originalIx: d.originalIx,
+        data: [d.beatmapName, d.difficultyName, d.mapperName, prettyNames[i]],
+      })
+    )
   );
 
   let searcher: FuzzySearcher.DynamicSearcher<SearchDatum, number> | null = null;
@@ -29,18 +40,18 @@
     searcher = FuzzySearcher.SearcherFactory.createSearcher<SearchDatum, number>(searcherConfig);
     searcher.load(memento);
   };
-  $: searchWorker.postMessage(indexingData);
+  $effect(() => searchWorker.postMessage(indexingData));
 
-  let searchText = '';
-  $: searchResults = (() => {
+  let searchText = $state('');
+  const searchResults = $derived.by(() => {
     if (!searchText || !searcher) {
       return [];
     }
     const query = new FuzzySearcher.Query(searchText, 20);
     return searcher.getMatches(query).matches;
-  })();
+  });
 
-  let open = false;
+  let open = $state(false);
 </script>
 
 <div class="root">

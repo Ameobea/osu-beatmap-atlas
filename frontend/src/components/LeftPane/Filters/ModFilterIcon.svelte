@@ -1,5 +1,7 @@
 <script lang="ts">
-  export let selected: boolean;
+  import type { Snippet } from "svelte";
+
+  let { selected = $bindable(), children }: { selected: boolean, children: Snippet } = $props();
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -7,11 +9,11 @@
 <div
   class="root"
   data-selected={selected}
-  on:click={() => {
+  onclick={() => {
     selected = !selected;
   }}
 >
-  <slot></slot>
+  {@render children()}
 </div>
 
 <style lang="css">

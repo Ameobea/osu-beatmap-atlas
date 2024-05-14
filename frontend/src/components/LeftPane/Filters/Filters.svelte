@@ -4,8 +4,7 @@
   import Filter from './Filter.svelte';
   import ModsFilter from './ModsFilter.svelte';
 
-  export let filterState: Writable<FilterState>;
-  export let dataExtents: DataExtents;
+  const { filterState, dataExtents }: { filterState: Writable<FilterState>; dataExtents: DataExtents } = $props();
 
   const floorWithPrecision = (value: number, precision: number) => {
     const multiplier = 10 ** precision;

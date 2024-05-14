@@ -12,7 +12,7 @@
   import type { FilterState } from '../../../viz/AtlasVizRegl';
   import ModFilterIcon from './ModFilterIcon.svelte';
 
-  export let state: FilterState['mods'];
+  const { state = $bindable() }: { state: FilterState['mods'] } = $props();
 </script>
 
 <div class="root">

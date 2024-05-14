@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Button, TextInput } from 'carbon-components-svelte';
 
-  export let onSubmit: (username: string | null) => void;
+  const { onSubmit }: { onSubmit: (username: string | null) => void } = $props();
 
-  let searchText = localStorage.getItem('activeUsername') || '';
+  let searchText = $state(localStorage.getItem('activeUsername') || '');
 
   const handleSubmit = () => {
     if (!searchText) {

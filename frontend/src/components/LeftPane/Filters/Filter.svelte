@@ -3,20 +3,30 @@
   import { genRandomStringID } from '../../../util';
   import DoubleEndedSlider from './DoubleEndedSlider.svelte';
 
-  export let min: number;
-  export let max: number;
-  export let value: [number, number];
-  export let label: string;
-  export let step = 1;
-  export let formatLabel: ((v: number) => string) | undefined = undefined;
-  /**
-   * Used to force the import of the carbon-components-svelte slider which is used in the DoubleEndedSlider component.
-   */
-  export let neverSetThis: boolean = false;
+  let {
+    min,
+    max,
+    value = $bindable(),
+    label,
+    step,
+    formatLabel,
+    neverSetThis = false,
+  }: {
+    min: number;
+    max: number;
+    value: [number, number];
+    label: string;
+    step: number;
+    formatLabel?: (v: number) => string;
+    /**
+     * Used to force the import of the carbon-components-svelte slider which is used in the DoubleEndedSlider component.
+     */
+    neverSetThis?: boolean;
+  } = $props();
 
-  let id = genRandomStringID();
+  const id = genRandomStringID();
 
-  $: toFixedPrecision = Math.max(step.toString().split('.')[1]?.length || 0, 1);
+  const toFixedPrecision = $derived(Math.max(step.toString().split('.')[1]?.length || 0, 1));
 
   const formatValue = (v: number) => {
     if (formatLabel) {

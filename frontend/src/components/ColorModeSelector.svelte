@@ -2,8 +2,7 @@
   import { ColorMode } from '$lib';
   import { Select, SelectItem } from 'carbon-components-svelte';
 
-  export let selected: ColorMode;
-  export let style: string | undefined = undefined;
+  let { selected = $bindable(), style }: { selected: ColorMode; style?: string } = $props();
 </script>
 
 <div class="color-mode-selector" {style}>

@@ -2,7 +2,7 @@
   import { Button } from 'carbon-components-svelte';
   import ChevronRight from 'carbon-icons-svelte/lib/ChevronRight.svelte';
 
-  export let expandSidebar: () => void;
+  const { expandSidebar }: { expandSidebar: () => void } = $props();
 </script>
 
 <div class="root">
