@@ -7,6 +7,7 @@
   import { GlobalCorpus, type ScoreMetadata } from '../corpus';
   import { AtlasVizRegl, type DataExtents, type FilterState } from '../viz/AtlasVizRegl';
   import ConfigureColors from './ConfigureColors.svelte';
+  import Info from './Info.svelte';
   import CollapsedLeftPane from './LeftPane/CollapsedLeftPane.svelte';
   import LeftPane from './LeftPane/LeftPane.svelte';
   import SelectedBeatmapInfo from './SelectedBeatmapInfo/SelectedBeatmapInfo.svelte';
@@ -76,10 +77,12 @@
   let viz: AtlasVizRegl | null = null;
   let leftPaneCollapsed = false;
 
-  $: if ($GlobalCorpus.status === 'loaded') {
+  let didInitializeFilterState = false;
+  $: if ($GlobalCorpus.status === 'loaded' && !didInitializeFilterState) {
     dataExtents = computeDataExtents($GlobalCorpus.data);
     if (!usedSavedFilterState) {
-      $filterState = JSON.parse(JSON.stringify(dataExtents));
+      $filterState = { ...$filterState, ...JSON.parse(JSON.stringify(dataExtents)) };
+      didInitializeFilterState = true;
     }
   }
 
@@ -178,7 +181,8 @@
 {/if}
 
 {#if !browser || $GlobalCorpus.status === 'loading' || $GlobalCorpus.status === 'notFetched'}
-  <p>Loading...</p>
+  <p>Loading visualization...</p>
+  <Info />
 {:else if $GlobalCorpus.status === 'error'}
   <p>Error: {$GlobalCorpus.error}</p>
 {/if}

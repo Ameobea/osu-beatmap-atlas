@@ -16,7 +16,7 @@
   <Button
     kind="tertiary"
     size="small"
-    style="background: black; color: #efefef !important; height: 20px; width: 86px"
+    style="background: black; color: #efefef !important; height: 20px; width: 76px; padding-left: 6px;"
     on:click={onClick}
   >
     Configure

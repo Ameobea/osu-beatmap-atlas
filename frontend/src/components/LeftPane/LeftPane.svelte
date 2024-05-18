@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from 'carbon-components-svelte';
+  import { Button, Modal } from 'carbon-components-svelte';
   import ChevronLeft from 'carbon-icons-svelte/lib/ChevronLeft.svelte';
 
   import type { ColorMode } from '$lib';
@@ -8,7 +8,10 @@
   import type { DataExtents, FilterState } from '../../viz/AtlasVizRegl';
   import BeatmapSearch from '../BeatmapSearch.svelte';
   import ColorModeSelector from '../ColorModeSelector.svelte';
+  import Info from '../Info.svelte';
   import Filters from './Filters/Filters.svelte';
+
+  let infoModalOpen = $state(false);
 
   const {
     collapseSidebar,
@@ -45,6 +48,21 @@
   <ColorModeSelector bind:selected={$curColorMode} style="margin-top: -24px" />
   <BeatmapSearch {corpus} onSelect={onBeatmapSelect} {visibleScoreIDs} {highlightedScoreIDs} />
   <Filters {filterState} {dataExtents} />
+
+  <div class="info-button">
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <span
+      style="cursor: pointer"
+      role="button"
+      tabindex="0"
+      onclick={() => {
+        infoModalOpen = true;
+      }}>Help + Info</span
+    >
+  </div>
+  <Modal bind:open={infoModalOpen} passiveModal>
+    <Info />
+  </Modal>
 </div>
 
 <style lang="css">
@@ -61,5 +79,15 @@
     border-right: 1px solid #64646488;
     border-top: 1px solid #64646488;
     min-width: 300px;
+  }
+
+  .info-button {
+    position: absolute;
+    bottom: 78px;
+    font-size: 16px;
+    width: 300px;
+    justify-content: center;
+    text-align: center;
+    text-decoration: underline;
   }
 </style>

@@ -88,6 +88,7 @@ export class AtlasVizRegl {
   public transformMatrix: mat3;
   private highlightedScoreIDs: Writable<Set<string> | null>;
   private hoveredScoreIx: number | null = null;
+  private hoveredScoreLabel: { scoreIx: number; node: HTMLDivElement } | null = null;
   public selectedScoreIx: Writable<number | null>;
   private activeUsername: Writable<string | null> = writable(null);
   private activeUserID: Writable<number | null>;
@@ -414,6 +415,54 @@ export class AtlasVizRegl {
     return colorizeDatum;
   }
 
+  private updateHoveredScoreLabelPosition() {
+    if (!this.corpus || !this.hoveredScoreLabel) {
+      return;
+    }
+
+    const datum = this.corpus[this.hoveredScoreLabel.scoreIx];
+    const canvasPos = this.worldToMouse(datum.position[0], datum.position[1]);
+    const labelWidth = this.hoveredScoreLabel.node.clientWidth;
+    this.hoveredScoreLabel.node.style.left = `${canvasPos[0] - labelWidth / 2}px`;
+    this.hoveredScoreLabel.node.style.top = `${canvasPos[1] - 32}px`;
+  }
+
+  private updateHoveredScoreLabel() {
+    if (!this.corpus) {
+      return;
+    }
+
+    if (this.hoveredScoreLabel?.scoreIx === this.hoveredScoreIx) {
+      this.updateHoveredScoreLabelPosition();
+      return;
+    }
+
+    this.hoveredScoreLabel?.node.remove();
+    this.hoveredScoreLabel = null;
+
+    if (this.hoveredScoreIx === null) {
+      return;
+    }
+
+    const datum = this.corpus[this.hoveredScoreIx];
+    const node = document.createElement('div');
+    node.style.position = 'absolute';
+    node.style.pointerEvents = 'none';
+    node.style.zIndex = '100';
+    node.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    node.style.color = 'white';
+    node.style.padding = '1px 2px';
+    node.style.fontSize = '14px';
+
+    node.innerText = `${datum.beatmapName} [${datum.difficultyName}]${datum.modString ? ` +${datum.modString}` : ''}`;
+
+    this.canvas.parentElement!.appendChild(node);
+
+    this.hoveredScoreLabel = { scoreIx: this.hoveredScoreIx, node };
+
+    this.updateHoveredScoreLabelPosition();
+  }
+
   private updateData(skipRadiiUpdate = false) {
     const fetchedCorpus = get(GlobalCorpus);
     if (fetchedCorpus.status !== 'loaded') {
@@ -525,6 +574,7 @@ export class AtlasVizRegl {
     this.selectedScoreIx.set(newSelectedScoreIx === -1 ? null : newSelectedScoreIx);
     const newHoveredScoreIx = this.corpus.findIndex((d) => d === oldHovered);
     this.hoveredScoreIx = newHoveredScoreIx === -1 ? null : newHoveredScoreIx;
+    this.updateHoveredScoreLabel();
 
     this.props.count = this.corpus.length;
     this.props.positions = this.regl.buffer(this.corpus.map((d) => d.position));
@@ -847,6 +897,9 @@ export class AtlasVizRegl {
 
       const oldHoveredScoreIx = this.hoveredScoreIx;
       this.hoveredScoreIx = this.hitTest(evt.offsetX, evt.offsetY);
+      if (evt.pointerType === 'mouse') {
+        this.updateHoveredScoreLabel();
+      }
       if ((oldHoveredScoreIx === null) !== (this.hoveredScoreIx === null) && evt.pointerType === 'mouse') {
         this.canvas.style.cursor = this.hoveredScoreIx === null ? 'default' : 'pointer';
       }
@@ -910,6 +963,7 @@ export class AtlasVizRegl {
     this.regl.destroy();
     this.regl._gl.getExtension('WEBGL_lose_context')?.loseContext();
     this.colorLegend?.remove();
+    this.hoveredScoreLabel?.node.remove();
 
     this.canvas.removeEventListener('wheel', this.inputCbs.wheel);
     this.canvas.removeEventListener('pointerdown', this.inputCbs.pointerDown);
