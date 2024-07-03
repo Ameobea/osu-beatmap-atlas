@@ -1,5 +1,8 @@
 set dotenv-load := true
 
+code:
+  code .
+
 run:
   yarn dev --port 7277
 

@@ -1,3 +1,4 @@
+import { PUBLIC_CORPUS_URL } from '$env/static/public';
 import { get, writable } from 'svelte/store';
 import { fetchCorpus } from './api';
 import { parseModsBitmask } from './modParser';
@@ -33,7 +34,7 @@ export interface ScoreMetadata {
 
 export type Corpus = ScoreMetadata[];
 
-const parseCorpus = (buffer: ArrayBuffer): ScoreMetadata[] => {
+const parseCorpus = (buffer: ArrayBuffer, version: CorpusVersion): ScoreMetadata[] => {
   const dataView = new DataView(buffer);
 
   // read item count first
@@ -49,8 +50,16 @@ const parseCorpus = (buffer: ArrayBuffer): ScoreMetadata[] => {
   for (let i = 0; i < numItems; i++) {
     const beatmapId = dataView.getInt32(rowDataOffset, true);
     const modsBitmask = dataView.getUint32(rowDataOffset + 4, true);
-    const x = 2 * dataView.getFloat32(rowDataOffset + 8, true);
-    const y = 2 * -dataView.getFloat32(rowDataOffset + 12, true);
+    let x = 2 * dataView.getFloat32(rowDataOffset + 8, true);
+    let y = 2 * -dataView.getFloat32(rowDataOffset + 12, true);
+    switch (version) {
+      case CorpusVersion.Latest:
+        x *= -1;
+        y *= -1;
+        break;
+      default:
+        break;
+    }
     const averagePp = dataView.getFloat32(rowDataOffset + 16, true);
     const starRating = dataView.getFloat32(rowDataOffset + 20, true);
     const beatmapNameLength = dataView.getUint16(rowDataOffset + 24, true);
@@ -121,7 +130,49 @@ type FetchedCorpus =
 
 export const GlobalCorpus = writable<FetchedCorpus>({ status: 'notFetched' });
 
-export const loadCorpus = async () => {
+export enum CorpusVersion {
+  Latest = 'LATEST',
+  First = '1716022133',
+}
+
+export const getCorpusURL = (version: CorpusVersion) => {
+  switch (version) {
+    case CorpusVersion.Latest:
+      return PUBLIC_CORPUS_URL;
+    case CorpusVersion.First:
+      return 'https://osu-map.b-cdn.net/corpus_1716022133.txt';
+  }
+};
+
+export const parseCorpusVersion = (version: number | string | null | undefined): CorpusVersion => {
+  switch (version) {
+    case 'LATEST':
+    case '':
+    case null:
+    case undefined:
+      return CorpusVersion.Latest;
+    case '1716022133':
+    case 1716022133:
+      return CorpusVersion.First;
+    default:
+      return CorpusVersion.Latest;
+  }
+};
+
+export const getCorpusDefaultView = (
+  version: CorpusVersion
+): { initialCenter: [number, number]; initialSpanX: number } => {
+  switch (version) {
+    case CorpusVersion.Latest:
+      return { initialCenter: [-10.4, 5], initialSpanX: 122.6 };
+    case CorpusVersion.First:
+      return { initialCenter: [14.4, -8], initialSpanX: 81.6 };
+    default:
+      throw new Error(`Invalid corpus version: ${version}`);
+  }
+};
+
+export const loadCorpus = async (version: CorpusVersion) => {
   if (get(GlobalCorpus).status !== 'notFetched') {
     return;
   }
@@ -130,8 +181,8 @@ export const loadCorpus = async () => {
 
   for (;;) {
     try {
-      const buffer = await fetchCorpus();
-      const corpus = parseCorpus(buffer);
+      const buffer = await fetchCorpus(getCorpusURL(version));
+      const corpus = parseCorpus(buffer, version);
       GlobalCorpus.set({ status: 'loaded', data: corpus });
       return;
     } catch (err) {

@@ -33,6 +33,10 @@
       return formatLabel(v);
     }
 
+    if (v === null || v === undefined) {
+      return '';
+    }
+
     let formatted = v.toFixed(toFixedPrecision);
     while (formatted.endsWith('0') || formatted.endsWith('.')) {
       const lastChar = formatted.slice(-1);

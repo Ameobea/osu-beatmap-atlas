@@ -1,3 +1,8 @@
+import { browser } from '$app/environment';
+import { page } from '$app/stores';
+import { derived, get } from 'svelte/store';
+import { CorpusVersion, parseCorpusVersion } from './corpus';
+
 export const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class UnreachableError extends Error {
@@ -23,6 +28,20 @@ export const genRandomStringID = globalThis.crypto
 (globalThis as any).dbg = (x: any) => {
   console.log(x);
   return x;
+};
+
+export const getCorpusVersionStore = () =>
+  derived(page, (page) => parseCorpusVersion(page.url.searchParams.get('version')));
+
+export const getCorpusVersion = (): CorpusVersion => {
+  if (!browser) {
+    return CorpusVersion.Latest;
+  }
+
+  const corpusVersionStore = getCorpusVersionStore();
+  const rawVersion = get(corpusVersionStore);
+  const corpusVersion = parseCorpusVersion(rawVersion);
+  return corpusVersion;
 };
 
 declare global {

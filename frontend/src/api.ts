@@ -1,9 +1,9 @@
 import { parseModsBitmask } from './modParser';
 
-import { PUBLIC_API_BRIDGE_BASE_URL, PUBLIC_CORPUS_URL } from '$env/static/public';
+import { PUBLIC_API_BRIDGE_BASE_URL } from '$env/static/public';
 
-export const fetchCorpus = async () => {
-  const response = await fetch(PUBLIC_CORPUS_URL);
+export const fetchCorpus = async (url: string) => {
+  const response = await fetch(url);
   return response.arrayBuffer();
 };
 

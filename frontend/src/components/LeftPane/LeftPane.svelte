@@ -4,7 +4,8 @@
 
   import type { ColorMode } from '$lib';
   import type { Writable } from 'svelte/store';
-  import type { Corpus } from '../../corpus';
+  import { CorpusVersion, type Corpus } from '../../corpus';
+  import { getCorpusVersion } from '../../util';
   import type { DataExtents, FilterState } from '../../viz/AtlasVizRegl';
   import BeatmapSearch from '../BeatmapSearch.svelte';
   import ColorModeSelector from '../ColorModeSelector.svelte';
@@ -32,6 +33,7 @@
     highlightedScoreIDs: Set<string>;
     curColorMode: Writable<ColorMode>;
   } = $props();
+  const corpusVersion = getCorpusVersion();
 </script>
 
 <div class="root">
@@ -50,6 +52,11 @@
   <Filters {filterState} {dataExtents} />
 
   <div class="info-button">
+    <div style="margin-bottom: 6px;">
+      <a href={corpusVersion === CorpusVersion.Latest ? `/?version=${CorpusVersion.First}` : '/'}>
+        {corpusVersion === CorpusVersion.Latest ? 'Switch to old atlas' : 'Switch to latest atlas'}
+      </a>
+    </div>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <span
       style="cursor: pointer"
@@ -57,8 +64,10 @@
       tabindex="0"
       onclick={() => {
         infoModalOpen = true;
-      }}>Help + Info</span
+      }}
     >
+      Help + Info
+    </span>
   </div>
   <Modal bind:open={infoModalOpen} passiveModal>
     <Info />

@@ -26,7 +26,11 @@ That's where `emblaze.py` comes in.  [Emblaze](https://github.com/cmudig/emblaze
 
 In that file, I generate + load the output files from the `embed.ipynb` notebook and use Emblaze to generate and visualize some 2D embeddings.  I also merge it with metadata at this stage to label the elements so I can tell which is which, mark my own hiscores to see how good of a job it's doing, color the circles by pp, bpm, length, release year, etc. and more.
 
-Once I produce an embedding I'm happy with, the next steps will be to export it along with its corresponding metadata and build the frontend to load + render it in the web browser - which currently is the final goal of this project!
+That will produce a file `embedding_new.json`.  This needs to be joined with computed beatmap metadata and difficulty data which is downloaded and computed by a Rust script.  That lives in `/scripts/beatmap-downloader`.
+
+Run `cr --release -- download` to fetch all of the beatmaps needed to compute difficulty data.
+
+Then when that's finished, run `cr --release -- build-corpus` to convert do the data joining and produce a binary file that the frontend reads which contains
 
 ## Runnning Them Yourself
 

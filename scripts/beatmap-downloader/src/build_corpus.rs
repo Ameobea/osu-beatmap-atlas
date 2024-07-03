@@ -156,7 +156,7 @@ pub(crate) async fn build_corpus(score_metadata: Vec<ScoreMetadata>) -> Vec<u8> 
 
   let beatmap_metadata_by_id = tokio::task::block_in_place(|| read_beatmap_metadata());
 
-  let embedding_file = tokio::fs::read("../../data/embedding.json")
+  let embedding_file = tokio::fs::read("../../data/embedding_new.json")
     .await
     .expect("Failed to read embedding file");
   // Embedding is in format score_id -> [x, y]

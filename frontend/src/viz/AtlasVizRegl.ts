@@ -5,8 +5,8 @@ import { ColorMode, ColorModeConfigs } from '$lib';
 import { get, writable, type Writable } from 'svelte/store';
 import { getHiscoreIDsForUser, getUserID } from '../api';
 import { buildColorLegend } from '../components/ColorLegend';
-import { GlobalCorpus, type Corpus, type ScoreMetadata } from '../corpus';
-import { UnreachableError, clamp, mix } from '../util';
+import { getCorpusDefaultView, GlobalCorpus, type Corpus, type CorpusVersion, type ScoreMetadata } from '../corpus';
+import { clamp, mix, UnreachableError } from '../util';
 import { turboColormap } from './colormap';
 import circleFragShader from './shaders/circle.frag';
 import circleVertShader from './shaders/circle.vert';
@@ -108,6 +108,7 @@ export class AtlasVizRegl {
     highlightedScoreIDs: Writable<Set<string> | null>,
     filterState: FilterState,
     onCanvasClick: () => void,
+    corpusVersion: CorpusVersion,
     initialTransformMatrix?: mat3
   ) {
     this.canvas = canvas;
@@ -140,10 +141,9 @@ export class AtlasVizRegl {
     this.transformMatrix =
       initialTransformMatrix ??
       (() => {
+        const { initialSpanX, initialCenter } = getCorpusDefaultView(corpusVersion);
         const aspectRatio = canvas.clientWidth / canvas.clientHeight;
-        const initialSpanX = 81.6;
         const initialSpanY = initialSpanX / aspectRatio;
-        const initialCenter = [14.4, -8];
         const transformMatrix = mat3.create();
         mat3.fromScaling(transformMatrix, [2 / initialSpanX, 2 / initialSpanY]);
         mat3.translate(transformMatrix, transformMatrix, [-initialCenter[0], -initialCenter[1]]);

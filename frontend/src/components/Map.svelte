@@ -5,6 +5,7 @@
   import { onDestroy } from 'svelte';
   import { writable, type Writable } from 'svelte/store';
   import { GlobalCorpus, type ScoreMetadata } from '../corpus';
+  import { getCorpusVersion } from '../util';
   import { AtlasVizRegl, type DataExtents, type FilterState } from '../viz/AtlasVizRegl';
   import ConfigureColors from './ConfigureColors.svelte';
   import Info from './Info.svelte';
@@ -23,7 +24,9 @@
   const computeDataExtents = (data: ScoreMetadata[]): DataExtents => {
     const pp = data.map((d) => d.averagePp);
     const stars = data.map((d) => d.starRating);
-    const aimSpeedRatio = data.map((d) => d.aimSpeedRatio);
+    const aimSpeedRatio = data
+      .map((d) => d.aimSpeedRatio)
+      .filter((x) => x !== null && x !== undefined && !Number.isNaN(x));
     const bpm = data.map((d) => d.bpm);
     const releaseYear = data.map((d) => d.releaseYear);
     const lengthSeconds = data.map((d) => d.realLengthSeconds);
@@ -65,6 +68,9 @@
             const parsed = JSON.parse(usedSavedFilterState) as FilterState;
             if (!parsed.mods) {
               parsed.mods = buildDefaultFilterState().mods;
+            }
+            if (parsed.aimSpeedRatio.some((x) => Number.isNaN(x) || x === null || x === undefined)) {
+              parsed.aimSpeedRatio = [0.85, 1.6];
             }
             return parsed;
           } catch (e) {
@@ -122,6 +128,7 @@
       highlightedScoreIDs,
       $filterState,
       handleCanvasClick,
+      getCorpusVersion(),
       (window as any).lastTransformationMatrix
     );
   };
