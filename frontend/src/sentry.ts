@@ -15,9 +15,8 @@ export const initSentry = () => {
   }
 
   Sentry.init({
-    dsn: 'https://3b73decea1fd4881984f19c6228ad86f@sentry.ameo.design/18',
-    integrations: [Sentry.browserTracingIntegration()],
-    tracesSampleRate: 1.0,
+    dsn: 'https://11add88260eb59cf0cbb85440f74ca71@sentry.ameo.design/4',
+    integrations: [],
   });
 };
 
