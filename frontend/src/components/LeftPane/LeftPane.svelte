@@ -30,7 +30,7 @@
     corpus: Corpus;
     onBeatmapSelect: (globalScoreIx: number) => void;
     visibleScoreIDs: Set<string>;
-    highlightedScoreIDs: Set<string>;
+    highlightedScoreIDs: Set<string> | null;
     curColorMode: Writable<ColorMode>;
   } = $props();
   const corpusVersion = getCorpusVersion();

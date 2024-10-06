@@ -60,7 +60,7 @@
   const usedSavedFilterState: string | null = (browser && localStorage.getItem('filter-state')) || null;
   let curColorMode = writable(ColorMode.StarRating);
   const visibleScoreIDs = writable<Set<string>>(new Set());
-  const highlightedScoreIDs = writable<Set<string>>(new Set());
+  const highlightedScoreIDs = writable<Set<string> | null>(new Set());
   const filterState: Writable<FilterState> = writable(
     usedSavedFilterState
       ? (() => {
@@ -109,7 +109,7 @@
     saveFilterStateTimeout = setTimeout(persistFilterState, 500);
   }
 
-  $: selectedScoreGlobalIx = $selectedScoreIx !== null ? viz?.getGlobalScoreIx($selectedScoreIx) ?? null : null;
+  $: selectedScoreGlobalIx = $selectedScoreIx !== null ? (viz?.getGlobalScoreIx($selectedScoreIx) ?? null) : null;
 
   const handleCanvasClick = () => {
     $configureColorsOpen = false;

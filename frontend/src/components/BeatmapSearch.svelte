@@ -16,7 +16,7 @@
     corpus: Corpus;
     onSelect: (globalScoreIx: number) => void;
     visibleScoreIDs: Set<string>;
-    highlightedScoreIDs: Set<string>;
+    highlightedScoreIDs: Set<string> | null;
   } = $props();
 
   const prettyNames = $derived(
@@ -66,7 +66,7 @@
   >
     {@const datum = corpus[item.id]}
     {@const isFiltered = !visibleScoreIDs.has(datum.scoreID)}
-    {@const isHighlighted = highlightedScoreIDs.has(datum.scoreID)}
+    {@const isHighlighted = highlightedScoreIDs?.has(datum.scoreID)}
     {@const textColor = isFiltered ? '#898989' : 'unset'}
     <div style="display: flex; flex-direction: row; margin-top: -5px; font-size: 15px; color: {textColor};">
       {item.text}
