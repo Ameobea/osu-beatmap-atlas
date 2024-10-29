@@ -3,7 +3,7 @@ import REGL from 'regl';
 
 import { ColorMode, ColorModeConfigs } from '$lib';
 import { get, writable, type Writable } from 'svelte/store';
-import { getHiscoreIDsForUser, getUserID } from '../api';
+import { getHiscoreIDsForUser, getUserID, updateUser } from '../api';
 import { buildColorLegend } from '../components/ColorLegend';
 import { getCorpusDefaultView, GlobalCorpus, type Corpus, type CorpusVersion, type ScoreMetadata } from '../corpus';
 import { clamp, mix, UnreachableError } from '../util';
@@ -265,35 +265,60 @@ export class AtlasVizRegl {
       return;
     }
 
-    getUserID(username).then((userID) => {
+    const userIDPromise = getUserID(username).then((userID) => {
       if (this.isDestroyed) {
         return;
       }
 
       this.activeUserID.set(userID);
+      return userID;
     });
 
-    getHiscoreIDsForUser(username)
-      .then((scoreIDs) => {
-        if (this.isDestroyed) {
-          return;
-        }
+    let didSetUpdatedHiscores = false;
 
-        if (!scoreIDs) {
-          this.highlightedScoreIDs.set(null);
-          return;
-        }
+    // Fetch hiscores for the user directly from the DB.
+    //
+    // Then, in the background, trigger an update of the user which fetches them from the osu! API and takes a bit longer.
+    //
+    // Once that finishes, fetch the hiscores again from the osu!track DB and update the viz.
+    const fetchAndSetHiscoreIDs = () =>
+      getHiscoreIDsForUser(username)
+        .then((scoreIDs) => {
+          if (didSetUpdatedHiscores) {
+            return;
+          }
 
-        this.activeUsername.set(username);
-        localStorage.setItem('lastUserHiscoreIDs', JSON.stringify(Array.from(scoreIDs)));
-        this.highlightedScoreIDs.set(scoreIDs);
-        this.sortedFullCorpus = undefined;
-        this.updateData();
-      })
-      .catch((err) => {
-        console.error(`Failed to fetch hiscore IDs for user ${username}:`, err);
-        alert(`Failed to fetch hiscores for user "${username}"; check spelling, punctuation, etc. and try again.`);
-      });
+          if (this.isDestroyed) {
+            return;
+          }
+
+          if (!scoreIDs) {
+            this.highlightedScoreIDs.set(null);
+            return;
+          }
+
+          this.activeUsername.set(username);
+          localStorage.setItem('lastUserHiscoreIDs', JSON.stringify(Array.from(scoreIDs)));
+          this.highlightedScoreIDs.set(scoreIDs);
+          this.sortedFullCorpus = undefined;
+          this.updateData();
+        })
+        .catch((err) => {
+          console.error(`Failed to fetch hiscore IDs for user ${username}:`, err);
+          alert(`Failed to fetch hiscores for user "${username}"; check spelling, punctuation, etc. and try again.`);
+        });
+
+    fetchAndSetHiscoreIDs();
+
+    userIDPromise.then(async (userID) => {
+      if (!userID) {
+        return;
+      }
+      await updateUser(userID);
+
+      await fetchAndSetHiscoreIDs();
+      didSetUpdatedHiscores = true;
+    });
   }
 
   private updateRadii() {

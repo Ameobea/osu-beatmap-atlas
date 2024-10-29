@@ -15,15 +15,16 @@ export const clamp = (x: number, min: number, max: number) => Math.min(Math.max(
 
 export const mix = (x: number, y: number, a: number) => x * (1 - a) + y * a;
 
-export const genRandomStringID = globalThis.crypto
-  ? () => crypto.randomUUID()
-  : () => {
-      const s4 = () =>
-        Math.floor((1 + Math.random()) * 0x10000)
-          .toString(16)
-          .substring(1);
-      return `${s4()}${s4()}-${s4()}${s4()}-${s4()}${s4()}-${s4()}${s4()}`;
-    };
+export const genRandomStringID =
+  globalThis.crypto && typeof globalThis.crypto?.randomUUID === 'function'
+    ? () => crypto.randomUUID()
+    : () => {
+        const s4 = () =>
+          Math.floor((1 + Math.random()) * 0x10000)
+            .toString(16)
+            .substring(1);
+        return `${s4()}${s4()}-${s4()}${s4()}-${s4()}${s4()}-${s4()}${s4()}`;
+      };
 
 (globalThis as any).dbg = (x: any) => {
   console.log(x);

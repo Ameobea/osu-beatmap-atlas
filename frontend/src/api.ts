@@ -7,6 +7,9 @@ export const fetchCorpus = async (url: string) => {
   return response.arrayBuffer();
 };
 
+export const updateUser = (userID: number) =>
+  fetch(`https://osutrack-api.ameo.dev/update?user=${userID}&mode=0`, { method: 'POST' });
+
 export const getHiscoreIDsForUser = async (username: string): Promise<Set<string> | null> => {
   const url = `https://osutrack-api.ameo.dev/hiscores?user=${username.trim()}&mode=0&userMode=username`;
   const res = await fetch(url);

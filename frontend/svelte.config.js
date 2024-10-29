@@ -7,7 +7,7 @@ const config = {
   // Consult https://kit.svelte.dev/docs/integrations#preprocessors
   // for more information about preprocessors
   preprocess: [
-    vitePreprocess(),
+    vitePreprocess({ script: true }),
     // \/ Won't work until this is fixed:
     // https://github.com/carbon-design-system/carbon-preprocess-svelte/issues/61
     optimizeImports(),

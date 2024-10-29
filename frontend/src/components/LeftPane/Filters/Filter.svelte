@@ -64,8 +64,8 @@
     flex-direction: column;
     align-items: center;
     margin-top: 22px;
-    padding-left: 6px;
-    padding-right: 6px;
+    padding-left: 0;
+    padding-right: 12px;
   }
 
   label {
