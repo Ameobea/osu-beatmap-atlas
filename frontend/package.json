@@ -43,7 +43,6 @@
     "@sentry/browser": "^8.35.0",
     "@tanstack/svelte-query": "^5.59.16",
     "d3-axis": "^3.0.0",
-    "d3-interpolate": "^3.0.1",
     "d3-scale": "^4.0.2",
     "d3-selection": "^3.0.0",
     "gl-matrix": "^3.4.3",
