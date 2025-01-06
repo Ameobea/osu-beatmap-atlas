@@ -2,7 +2,6 @@ extern crate foundations;
 
 use std::{
   io::{Read, Write},
-  str::FromStr,
   time::Duration,
 };
 
@@ -11,9 +10,10 @@ use fxhash::FxHashSet;
 use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
 
-use foundations::telemetry::{log::*, settings::LogVerbosity};
+use foundations::telemetry::{log::*, settings::LogVerbosity, TelemetryConfig};
+use rosu_mods::GameMode;
 use rosu_pp::{any::DifficultyAttributes, osu::OsuDifficultyAttributes, Beatmap, Difficulty};
-use rosu_v2::model::GameMods;
+use rosu_v2::prelude::{GameMod, GameMods};
 
 mod build_corpus;
 
@@ -290,7 +290,13 @@ async fn compute_difficulty(score_id: &str) -> Result<OsuDifficultyAttributes, S
   let (beatmap_id, mods_string) = score_id
     .split_once('_')
     .expect("Failed to split score ID into beatmap ID and mods");
-  let mods = GameMods::from_str(mods_string).expect("Failed to parse mods");
+  let mut game_mods = GameMods::new();
+  let mod_count = mods_string.len() / 2;
+  for i in 0..mod_count {
+    let acronym = &mods_string[i * 2..(i + 1) * 2];
+    let game_mod = GameMod::new(acronym, GameMode::Osu);
+    game_mods.insert(game_mod);
+  }
 
   let raw_beatmap = match load_beatmap(beatmap_id.parse().unwrap()).await {
     Ok(Some(raw_beatmap)) => raw_beatmap,
@@ -315,7 +321,7 @@ async fn compute_difficulty(score_id: &str) -> Result<OsuDifficultyAttributes, S
     },
   };
 
-  let difficulty = compute_difficulty_inner(&raw_beatmap, mods).unwrap();
+  let difficulty = compute_difficulty_inner(&raw_beatmap, game_mods).unwrap();
   Ok(difficulty)
 }
 
@@ -448,10 +454,12 @@ async fn main() {
 
   let svc_info = foundations::service_info!();
   let mut telemetry_settings = foundations::telemetry::settings::TelemetrySettings::default();
-  telemetry_settings.logging.verbosity =
-    LogVerbosity(foundations::telemetry::settings::Level::Info);
-  foundations::telemetry::init(&svc_info, &telemetry_settings)
-    .expect("Failed to initialize telemetry");
+  telemetry_settings.logging.verbosity = LogVerbosity::Info;
+  foundations::telemetry::init(TelemetryConfig {
+    service_info: &svc_info,
+    settings: &telemetry_settings,
+  })
+  .expect("Failed to initialize telemetry");
 
   let cli = Cli::parse();
 

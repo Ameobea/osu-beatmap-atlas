@@ -31,7 +31,7 @@
 //! end.  When parsing rows, a pointer should be initialized to the start of the string region and
 //! incremented by the length of each string field in each row as they are parsed.
 
-use std::{path::Path, str::FromStr};
+use std::path::Path;
 
 use chrono::{DateTime, Datelike, Utc};
 use foundations::telemetry::log::*;
@@ -40,7 +40,7 @@ use parquet::{
   file::reader::{FileReader, SerializedFileReader},
   record::RowAccessor,
 };
-use rosu_v2::model::GameMods;
+use rosu_mods::{GameMod, GameMode, GameMods};
 
 use crate::{DifficultyRecord, ScoreMetadata};
 
@@ -182,8 +182,14 @@ pub(crate) async fn build_corpus(score_metadata: Vec<ScoreMetadata>) -> Vec<u8> 
 
     let (beatmap_id, mods_str) = score_metadata.score_id.split_once('_').unwrap();
     let beatmap_id: i32 = beatmap_id.parse().unwrap();
-    let mods = GameMods::from_str(mods_str).unwrap();
-    let mods_bits = mods.bits();
+    let mut game_mods = GameMods::new();
+    let mod_count = mods_str.len() / 2;
+    for i in 0..mod_count {
+      let acronym = &mods_str[i * 2..(i + 1) * 2];
+      let game_mod = GameMod::new(acronym, GameMode::Osu);
+      game_mods.insert(game_mod);
+    }
+    let mods_bits = game_mods.bits();
 
     let beatmap_metadata = beatmap_metadata_by_id
       .get(&beatmap_id)
