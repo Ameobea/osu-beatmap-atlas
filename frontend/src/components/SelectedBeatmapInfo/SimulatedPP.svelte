@@ -1,12 +1,14 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
   import { Checkbox, LocalStorage, Slider } from 'carbon-components-svelte';
+
   import { batchSimulatePlay, type SimulatePlayParams } from '../../api';
   import type { ScoreMetadata } from '../../corpus';
 
   export let entry: ScoreMetadata;
 
   let hiddenEnabled = false;
+  let isClassic = true;
   let sliderValue = 99.5;
 
   const minAcc = 93;
@@ -15,7 +17,7 @@
   const sliderStep = (maxAcc - minAcc) / (buckets - 1);
 
   $: simulatePlayRes = createQuery({
-    queryKey: ['simulatePlay', entry.beatmapId, entry.modString, hiddenEnabled],
+    queryKey: ['simulatePlay', entry.beatmapId, entry.modString, hiddenEnabled, isClassic],
     queryFn: async () => {
       const modString = `${entry.modString}${hiddenEnabled ? 'HD' : ''}`;
       const params: SimulatePlayParams[] = [];
@@ -25,6 +27,7 @@
         params.push({
           acc,
           mods: modString,
+          is_classic: isClassic,
         });
       }
 
@@ -35,11 +38,13 @@
 </script>
 
 <LocalStorage bind:value={hiddenEnabled} key="sim-pp-hiddenEnabled" />
+<LocalStorage bind:value={isClassic} key="sim-pp-classicEnabled" />
 <LocalStorage bind:value={sliderValue} key="sim-pp-sliderValue" />
 
 <div class="simulate-play">
   <h3>Simulate Play</h3>
   <Checkbox bind:checked={hiddenEnabled} labelText="+HD" />
+  <Checkbox bind:checked={isClassic} labelText="Stable/Classic" />
 
   <Slider
     min={93}
@@ -52,7 +57,7 @@
   />
   <p>
     {sliderValue.toFixed(1)}%: {$simulatePlayRes.data
-      ? $simulatePlayRes.data.find((d) => d.acc === sliderValue)?.pp.toFixed(2) ?? '?'
+      ? ($simulatePlayRes.data.find((d) => d.acc === sliderValue)?.pp.toFixed(2) ?? '?')
       : '--'}pp
   </p>
 </div>

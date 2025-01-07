@@ -83,6 +83,7 @@ export const getBestUserScoreForBeatmap = async (
 
 export interface SimulatePlayParams {
   mods?: string;
+  is_classic?: boolean;
   max_combo?: number;
   acc?: number;
   misses?: number;
