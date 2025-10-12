@@ -4,7 +4,7 @@
 
   import type { ColorMode } from '$lib';
   import type { Writable } from 'svelte/store';
-  import { CorpusVersion, type Corpus } from '../../corpus';
+  import { CorpusVersion, CorpusVersions, type Corpus } from '../../corpus';
   import { getCorpusVersion } from '../../util';
   import type { DataExtents, FilterState } from '../../viz/AtlasVizRegl';
   import BeatmapSearch from '../BeatmapSearch.svelte';
@@ -34,6 +34,9 @@
     curColorMode: Writable<ColorMode>;
   } = $props();
   const corpusVersion = getCorpusVersion();
+  const corpusVersionIx = CorpusVersions.indexOf(corpusVersion);
+  const prevCorpusVersion = corpusVersionIx === 0 ? null : CorpusVersions[corpusVersionIx - 1];
+  const nextCorpusVersion = corpusVersionIx === CorpusVersions.length - 1 ? null : CorpusVersions[corpusVersionIx + 1];
 </script>
 
 <div class="root">
@@ -53,9 +56,16 @@
 
   <div class="info-button">
     <div style="margin-bottom: 6px;">
-      <a href={corpusVersion === CorpusVersion.Latest ? `/?version=${CorpusVersion.First}` : '/'}>
-        {corpusVersion === CorpusVersion.Latest ? 'Switch to old atlas' : 'Switch to latest atlas'}
-      </a>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        {#if prevCorpusVersion !== null}
+          <a href={`/?version=${prevCorpusVersion}`} style="margin-right: 12px">Switch to older atlas</a>
+        {/if}
+        {#if nextCorpusVersion !== null}
+          <a href={nextCorpusVersion === CorpusVersion.Latest ? '/' : `/?version=${nextCorpusVersion}`}
+            >{`Switch to ${nextCorpusVersion === CorpusVersion.Latest ? 'latest' : 'newer'} atlas`}</a
+          >
+        {/if}
+      </div>
     </div>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <span
