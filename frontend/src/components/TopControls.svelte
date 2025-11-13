@@ -4,7 +4,9 @@
 
   const { onSubmit }: { onSubmit: (username: string | null) => void } = $props();
 
-  let searchText = $state(localStorage.getItem('activeUsername') || '');
+  let searchText = $state(
+    new URLSearchParams(window.location.search).get('user') || localStorage.getItem('activeUsername') || ''
+  );
   let windowWidth = $state(1200);
   const searchButtonWidth = 86;
   const infoButtonWidth = $derived(windowWidth <= 600 ? 62 : 0);

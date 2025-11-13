@@ -223,7 +223,8 @@ export class AtlasVizRegl {
     }
     this.updateData();
 
-    const initialActiveUsername = localStorage.getItem('activeUsername');
+    const initialActiveUsername =
+      new URLSearchParams(window.location.search).get('user') || localStorage.getItem('activeUsername');
     if (initialActiveUsername) {
       this.setActiveUsername(initialActiveUsername);
     }
