@@ -112,3 +112,71 @@ export const batchSimulatePlay = async (
   const json = await res.json();
   return json.pp;
 };
+
+const ANALYTICS_SALT = '4rW9XKHcEKa6bolWry8k0LGW';
+
+export interface AnalyticsEvent {
+  category: string;
+  subcategory: string;
+}
+
+const computeAnalyticsVerificationHash = async (events: AnalyticsEvent[]): Promise<string> => {
+  const encoder = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest(
+    'SHA-256',
+    encoder.encode(events.map((evt) => evt.category + evt.subcategory).join('') + ANALYTICS_SALT)
+  );
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+};
+
+export const submitAnalyticsEvent = async (
+  event: AnalyticsEvent,
+  fetch: typeof window.fetch = window.fetch
+): Promise<void> => {
+  const verification = await computeAnalyticsVerificationHash([event]);
+  const body = {
+    event,
+    verification,
+  };
+
+  const response = await fetch(`${PUBLIC_API_BRIDGE_BASE_URL}/a/v`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Failed to submit analytics event:', errorText);
+    throw new Error(`Failed to submit analytics event: ${response.statusText}`);
+  }
+};
+
+export const submitBatchAnalyticsEvents = async (
+  events: AnalyticsEvent[],
+  fetch: typeof window.fetch = window.fetch
+): Promise<void> => {
+  const verification = await computeAnalyticsVerificationHash(events);
+  const body = {
+    events,
+    verification,
+  };
+
+  const response = await fetch(`${PUBLIC_API_BRIDGE_BASE_URL}/a/z`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Failed to submit batch analytics events:', errorText);
+    throw new Error(`Failed to submit batch analytics events: ${response.statusText}`);
+  }
+};

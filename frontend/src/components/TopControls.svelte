@@ -2,6 +2,8 @@
   import { Button, Modal, TextInput } from 'carbon-components-svelte';
   import Info from './Info.svelte';
 
+  import { submitAnalyticsEvent } from '../api';
+
   const { onSubmit }: { onSubmit: (username: string | null) => void } = $props();
 
   let searchText = $state(
@@ -13,6 +15,8 @@
   let infoModalOpen = $state(false);
 
   const handleSubmit = () => {
+    setTimeout(() => submitAnalyticsEvent({ category: 'beatmap_atlas', subcategory: 'submit_username_search' }));
+
     if (!searchText) {
       localStorage.removeItem('activeUsername');
       onSubmit(null);

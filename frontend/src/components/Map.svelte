@@ -4,6 +4,7 @@
   import { LocalStorage } from 'carbon-components-svelte';
   import { onDestroy } from 'svelte';
   import { writable, type Writable } from 'svelte/store';
+  import { submitAnalyticsEvent } from '../api';
   import { GlobalCorpus, type ScoreMetadata } from '../corpus';
   import { getCorpusVersion } from '../util';
   import { AtlasVizRegl, type DataExtents, type FilterState } from '../viz/AtlasVizRegl';
@@ -156,6 +157,7 @@
     {#if leftPaneCollapsed}
       <CollapsedLeftPane
         expandSidebar={() => {
+          setTimeout(() => submitAnalyticsEvent({ category: 'beatmap_atlas', subcategory: 'expand_sidebar' }));
           leftPaneCollapsed = false;
         }}
       />
@@ -163,11 +165,17 @@
       <LeftPane
         collapseSidebar={() => {
           leftPaneCollapsed = true;
+          setTimeout(() => submitAnalyticsEvent({ category: 'beatmap_atlas', subcategory: 'collapse_sidebar' }));
         }}
         {filterState}
         {dataExtents}
         corpus={$GlobalCorpus.data}
-        onBeatmapSelect={(globalScoreIx) => viz?.selectAndFlyToScore(globalScoreIx)}
+        onBeatmapSelect={(globalScoreIx) => {
+          setTimeout(() =>
+            submitAnalyticsEvent({ category: 'beatmap_atlas', subcategory: 'select_beatmap_from_search' })
+          );
+          viz?.selectAndFlyToScore(globalScoreIx);
+        }}
         visibleScoreIDs={$visibleScoreIDs}
         highlightedScoreIDs={$highlightedScoreIDs}
         {curColorMode}

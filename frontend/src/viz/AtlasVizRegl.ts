@@ -3,7 +3,7 @@ import REGL from 'regl';
 
 import { ColorMode, ColorModeConfigs } from '$lib';
 import { get, writable, type Writable } from 'svelte/store';
-import { getHiscoreIDsForUser, getUserID, updateUser } from '../api';
+import { getHiscoreIDsForUser, getUserID, submitAnalyticsEvent, updateUser } from '../api';
 import { buildColorLegend } from '../components/ColorLegend';
 import { getCorpusDefaultView, GlobalCorpus, type Corpus, type CorpusVersion, type ScoreMetadata } from '../corpus';
 import { clamp, mix, UnreachableError } from '../util';
@@ -861,6 +861,8 @@ export class AtlasVizRegl {
         this.selectedScoreIx.set(null);
         this.updatePointSize(oldSelectedScoreIx);
       } else if (hit !== null && oldSelectedScoreIx !== hit) {
+        setTimeout(() => submitAnalyticsEvent({ category: 'beatmap_atlas', subcategory: 'select_score' }));
+
         this.selectedScoreIx.set(hit);
         if (oldSelectedScoreIx !== null) {
           this.updatePointSize(oldSelectedScoreIx);

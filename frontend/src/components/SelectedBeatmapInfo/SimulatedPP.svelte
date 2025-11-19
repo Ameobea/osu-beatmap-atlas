@@ -2,7 +2,7 @@
   import { createQuery } from '@tanstack/svelte-query';
   import { Checkbox, LocalStorage, Slider } from 'carbon-components-svelte';
 
-  import { batchSimulatePlay, type SimulatePlayParams } from '../../api';
+  import { batchSimulatePlay, submitAnalyticsEvent, type SimulatePlayParams } from '../../api';
   import type { ScoreMetadata } from '../../corpus';
 
   export let entry: ScoreMetadata;
@@ -43,8 +43,20 @@
 
 <div class="simulate-play">
   <h3>Simulate Play</h3>
-  <Checkbox bind:checked={hiddenEnabled} labelText="+HD" />
-  <Checkbox bind:checked={isClassic} labelText="Stable/Classic" />
+  <Checkbox
+    bind:checked={hiddenEnabled}
+    on:change={() =>
+      setTimeout(() => submitAnalyticsEvent({ category: 'beatmap_atlas', subcategory: 'beatmap_details_toggle_hd' }))}
+    labelText="+HD"
+  />
+  <Checkbox
+    bind:checked={isClassic}
+    on:change={() =>
+      setTimeout(() =>
+        submitAnalyticsEvent({ category: 'beatmap_atlas', subcategory: 'beatmap_details_toggle_classic' })
+      )}
+    labelText="Stable/Classic"
+  />
 
   <Slider
     min={93}

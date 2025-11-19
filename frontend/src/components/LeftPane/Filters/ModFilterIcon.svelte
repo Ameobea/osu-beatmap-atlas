@@ -1,7 +1,8 @@
 <script lang="ts">
-  import type { Snippet } from "svelte";
+  import type { Snippet } from 'svelte';
+  import { submitAnalyticsEvent } from '../../../api';
 
-  let { selected = $bindable(), children }: { selected: boolean, children: Snippet } = $props();
+  let { selected = $bindable(), children }: { selected: boolean; children: Snippet } = $props();
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -10,6 +11,8 @@
   class="root"
   data-selected={selected}
   onclick={() => {
+    setTimeout(() => submitAnalyticsEvent({ category: 'beatmap_atlas', subcategory: 'toggle_mod_filter' }));
+
     selected = !selected;
   }}
 >

@@ -4,6 +4,7 @@
 
   import type { ColorMode } from '$lib';
   import type { Writable } from 'svelte/store';
+  import { submitAnalyticsEvent } from '../../api';
   import { CorpusVersion, CorpusVersions, type Corpus } from '../../corpus';
   import { getCorpusVersion } from '../../util';
   import type { DataExtents, FilterState } from '../../viz/AtlasVizRegl';
@@ -61,9 +62,9 @@
           <a href={`/?version=${prevCorpusVersion}`} style="margin-right: 12px">Switch to older atlas</a>
         {/if}
         {#if nextCorpusVersion !== null}
-          <a href={nextCorpusVersion === CorpusVersion.Latest ? '/' : `/?version=${nextCorpusVersion}`}
-            >{`Switch to ${nextCorpusVersion === CorpusVersion.Latest ? 'latest' : 'newer'} atlas`}</a
-          >
+          <a href={nextCorpusVersion === CorpusVersion.Latest ? '/' : `/?version=${nextCorpusVersion}`}>
+            {`Switch to ${nextCorpusVersion === CorpusVersion.Latest ? 'latest' : 'newer'} atlas`}
+          </a>
         {/if}
       </div>
     </div>
@@ -73,6 +74,7 @@
       role="button"
       tabindex="0"
       onclick={() => {
+        setTimeout(() => submitAnalyticsEvent({ category: 'beatmap_atlas', subcategory: 'open_info_modal' }));
         infoModalOpen = true;
       }}
     >
