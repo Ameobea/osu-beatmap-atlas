@@ -118,8 +118,8 @@ export class AtlasVizRegl {
     this.visibleScoreIDs = visibleScoreIDs;
     this.highlightedScoreIDs = highlightedScoreIDs;
     this.filterState = filterState;
-    this.canvasWidth = canvas.clientWidth;
-    this.canvasHeight = canvas.clientHeight;
+    this.canvasWidth = canvas.clientWidth || window.innerWidth || 1;
+    this.canvasHeight = canvas.clientHeight || window.innerHeight || 1;
 
     const regl = REGL({
       canvas,
@@ -142,7 +142,7 @@ export class AtlasVizRegl {
       initialTransformMatrix ??
       (() => {
         const { initialSpanX, initialCenter } = getCorpusDefaultView(corpusVersion);
-        const aspectRatio = canvas.clientWidth / canvas.clientHeight;
+        const aspectRatio = this.canvasWidth / this.canvasHeight;
         const initialSpanY = initialSpanX / aspectRatio;
         const transformMatrix = mat3.create();
         mat3.fromScaling(transformMatrix, [2 / initialSpanX, 2 / initialSpanY]);
@@ -683,6 +683,9 @@ export class AtlasVizRegl {
 
   private mouseToWorld = (x: number, y: number, transformMatrix = this.transformMatrix): vec2 => {
     const invertedMatrix = mat3.invert(mat3.create(), transformMatrix);
+    if (!invertedMatrix) {
+      return [0, 0];
+    }
     const viewportX = (x / this.canvasWidth) * 2 - 1;
     const viewportY = 1 - (y / this.canvasHeight) * 2;
 
@@ -893,6 +896,9 @@ export class AtlasVizRegl {
           );
 
           const scaleAdjustment = curDistancePixels / dragData.pinchZoomData.lastDistancePixels;
+          if (!Number.isFinite(scaleAdjustment) || scaleAdjustment === 0) {
+            return;
+          }
           mat3.scale(this.transformMatrix, this.transformMatrix, [scaleAdjustment, scaleAdjustment]);
 
           dragData.pinchZoomData.lastDistancePixels = curDistancePixels;
@@ -949,6 +955,10 @@ export class AtlasVizRegl {
     const handleWindowResize = () => {
       const newCanvasWidth = this.canvas.clientWidth;
       const newCanvasHeight = this.canvas.clientHeight;
+
+      if (newCanvasWidth === 0 || newCanvasHeight === 0) {
+        return;
+      }
 
       if (newCanvasWidth === this.canvasWidth && newCanvasHeight === this.canvasHeight) {
         return;

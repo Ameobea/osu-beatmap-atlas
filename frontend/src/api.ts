@@ -40,7 +40,7 @@ interface UserScoreForBeatmap {
   accuracy: number;
   is_perfect_combo: boolean;
   max_combo: number;
-  pp: number;
+  pp?: number | null;
   total_score: number;
   // like "2024-04-03T08:17:10Z"
   started_at: Date | null;

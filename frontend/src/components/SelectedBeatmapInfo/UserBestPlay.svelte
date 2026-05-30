@@ -15,7 +15,7 @@
       return getBestUserScoreForBeatmap(activeUserID, entry.beatmapId, entry.modString);
     },
   });
-  $: playedAt = $bestUserScoreRes.data ? $bestUserScoreRes.data.ended_at ?? $bestUserScoreRes.data.started_at : null;
+  $: playedAt = $bestUserScoreRes.data ? ($bestUserScoreRes.data.ended_at ?? $bestUserScoreRes.data.started_at) : null;
 </script>
 
 <div class="user-best">
@@ -24,7 +24,7 @@
   {/if}
   {#if $bestUserScoreRes.data}
     <p>Rank: {$bestUserScoreRes.data.rank}</p>
-    <p>PP: {$bestUserScoreRes.data.pp.toFixed(2)}</p>
+    <p>PP: {$bestUserScoreRes.data.pp?.toFixed(2) ?? '-'}</p>
     <p>Combo: {$bestUserScoreRes.data.max_combo}</p>
     <p>Accuracy: {($bestUserScoreRes.data.accuracy * 100).toFixed(2)}%</p>
     <p>
