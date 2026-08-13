@@ -2,12 +2,14 @@
   import { ColorMode } from '$lib';
   import { Button } from 'carbon-components-svelte';
   import type { Writable } from 'svelte/store';
+  import { logEvent } from '../api';
   import ColorModeSelector from './ColorModeSelector.svelte';
 
   export let curColorMode: Writable<ColorMode>;
   export let configuratorOpen: Writable<boolean>;
 
   const onClick = () => {
+    logEvent('toggle_configure_colors', { open: !$configuratorOpen });
     $configuratorOpen = !$configuratorOpen;
   };
 </script>

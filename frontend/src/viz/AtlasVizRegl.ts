@@ -3,7 +3,15 @@ import REGL from 'regl';
 
 import { ColorMode, ColorModeConfigs } from '$lib';
 import { get, writable, type Writable } from 'svelte/store';
-import { getHiscoreIDsForUser, getUserID, submitAnalyticsEvent, updateUser } from '../api';
+import { getHiscoreIDsForUser, getUserID, logEvent, updateUser } from '../api';
+
+let vizEngaged = false;
+const markVizEngaged = () => {
+  if (!vizEngaged) {
+    vizEngaged = true;
+    logEvent('viz_engaged');
+  }
+};
 import { buildColorLegend } from '../components/ColorLegend';
 import { getCorpusDefaultView, GlobalCorpus, type Corpus, type CorpusVersion, type ScoreMetadata } from '../corpus';
 import { clamp, mix, UnreachableError } from '../util';
@@ -256,7 +264,7 @@ export class AtlasVizRegl {
     return radius;
   }
 
-  public setActiveUsername(username: string | null) {
+  public setActiveUsername(username: string | null, userInitiated = false) {
     if (!username) {
       this.activeUsername.set(null);
       this.activeUserID.set(null);
@@ -276,6 +284,19 @@ export class AtlasVizRegl {
     });
 
     let didSetUpdatedHiscores = false;
+    // The two-phase fetch below runs this logic twice per search; log the result only once,
+    // except that a found=false from the first fetch can be upgraded to found=true by the second.
+    let loggedFound: boolean | null = null;
+    const logSearchResult = (found: boolean, hiscoreBucket?: number) => {
+      if (!userInitiated || loggedFound === true || loggedFound === found) {
+        return;
+      }
+      loggedFound = found;
+      logEvent(
+        'username_search_result',
+        found ? { found, username, hiscoreBucket } : { found, username }
+      );
+    };
 
     // Fetch hiscores for the user directly from the DB.
     //
@@ -294,12 +315,15 @@ export class AtlasVizRegl {
           }
 
           if (!scoreIDs) {
+            logSearchResult(false);
             this.highlightedScoreIDs.set(null);
             return;
           }
 
+          const scoreIDsArr = Array.from(scoreIDs);
+          logSearchResult(true, 10 * Math.floor(scoreIDsArr.length / 10));
           this.activeUsername.set(username);
-          localStorage.setItem('lastUserHiscoreIDs', JSON.stringify(Array.from(scoreIDs)));
+          localStorage.setItem('lastUserHiscoreIDs', JSON.stringify(scoreIDsArr));
           this.highlightedScoreIDs.set(scoreIDs);
           this.sortedFullCorpus = undefined;
           this.updateData();
@@ -864,7 +888,15 @@ export class AtlasVizRegl {
         this.selectedScoreIx.set(null);
         this.updatePointSize(oldSelectedScoreIx);
       } else if (hit !== null && oldSelectedScoreIx !== hit) {
-        setTimeout(() => submitAnalyticsEvent({ category: 'beatmap_atlas', subcategory: 'select_score' }));
+        setTimeout(() => {
+          const meta = this.corpus?.[hit];
+          logEvent(
+            'select_score',
+            meta
+              ? { beatmapId: meta.beatmapId, mods: meta.modString, starBucket: Math.floor(meta.starRating) }
+              : undefined
+          );
+        });
 
         this.selectedScoreIx.set(hit);
         if (oldSelectedScoreIx !== null) {
@@ -919,6 +951,7 @@ export class AtlasVizRegl {
       }
 
       if (dragData) {
+        markVizEngaged();
         const mouseWorldBefore = dragData.startWorldCoord;
         const mouseWorldAfter = this.mouseToWorld(evt.offsetX, evt.offsetY);
 

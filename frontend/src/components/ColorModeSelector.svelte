@@ -2,7 +2,7 @@
   import { ColorMode } from '$lib';
   import { Select, SelectItem } from 'carbon-components-svelte';
 
-  import { submitAnalyticsEvent } from '../api';
+  import { logEvent } from '../api';
 
   let { selected = $bindable(), style }: { selected: ColorMode; style?: string } = $props();
 </script>
@@ -11,8 +11,7 @@
   <Select
     labelText="Color By"
     bind:selected
-    on:change={() =>
-      setTimeout(() => submitAnalyticsEvent({ category: 'beatmap_atlas', subcategory: 'select_color_mode' }))}
+    on:change={() => setTimeout(() => logEvent('select_color_mode', { mode: ColorMode[selected] }))}
     style="flex: 0"
   >
     <SelectItem value={ColorMode.StarRating} text="Star Rating" />

@@ -4,7 +4,7 @@
   import { LocalStorage } from 'carbon-components-svelte';
   import { onDestroy } from 'svelte';
   import { writable, type Writable } from 'svelte/store';
-  import { submitAnalyticsEvent } from '../api';
+  import { logEvent } from '../api';
   import { GlobalCorpus, type ScoreMetadata } from '../corpus';
   import { getCorpusVersion } from '../util';
   import { AtlasVizRegl, type DataExtents, type FilterState } from '../viz/AtlasVizRegl';
@@ -157,7 +157,7 @@
     {#if leftPaneCollapsed}
       <CollapsedLeftPane
         expandSidebar={() => {
-          setTimeout(() => submitAnalyticsEvent({ category: 'beatmap_atlas', subcategory: 'expand_sidebar' }));
+          logEvent('expand_sidebar');
           leftPaneCollapsed = false;
         }}
       />
@@ -165,15 +165,15 @@
       <LeftPane
         collapseSidebar={() => {
           leftPaneCollapsed = true;
-          setTimeout(() => submitAnalyticsEvent({ category: 'beatmap_atlas', subcategory: 'collapse_sidebar' }));
+          logEvent('collapse_sidebar');
         }}
         {filterState}
         {dataExtents}
         corpus={$GlobalCorpus.data}
         onBeatmapSelect={(globalScoreIx) => {
-          setTimeout(() =>
-            submitAnalyticsEvent({ category: 'beatmap_atlas', subcategory: 'select_beatmap_from_search' })
-          );
+          logEvent('select_beatmap_from_search', {
+            beatmapId: $GlobalCorpus.status === 'loaded' ? $GlobalCorpus.data[globalScoreIx]?.beatmapId : undefined,
+          });
           viz?.selectAndFlyToScore(globalScoreIx);
         }}
         visibleScoreIDs={$visibleScoreIDs}
@@ -182,7 +182,7 @@
       />
     {/if}
   {/if}
-  <TopControls onSubmit={(username) => viz?.setActiveUsername(username)} />
+  <TopControls onSubmit={(username) => viz?.setActiveUsername(username, true)} />
   {#if windowWidth < 600}
     <ConfigureColors {curColorMode} configuratorOpen={configureColorsOpen} />
   {/if}

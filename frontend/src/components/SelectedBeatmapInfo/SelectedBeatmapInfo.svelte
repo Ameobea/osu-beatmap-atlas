@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { logEvent } from '../../api';
   import type { Corpus } from '../../corpus';
   import SimulatedPp from './SimulatedPP.svelte';
   import UserBestPlay from './UserBestPlay.svelte';
@@ -26,20 +27,31 @@
 <div class="root">
   <div class="content">
     <h2>
-      <a href={`https://osu.ppy.sh/b/${entry.beatmapId}`} target="_blank">
+      <a
+        href={`https://osu.ppy.sh/b/${entry.beatmapId}`}
+        target="_blank"
+        onclick={() => logEvent('open_beatmap_page', { beatmapId: entry.beatmapId })}
+      >
         {entry.beatmapName} [{entry.difficultyName}] {entry.modString ? `+${entry.modString}` : null}
       </a>
     </h2>
     <div class="below-title">
       <div>
         <p>
-          Mapped by <a href={`https://osu.ppy.sh/u/${entry.mapperName}`} target="_blank"><b>{entry.mapperName}</b></a>
+          Mapped by <a
+            href={`https://osu.ppy.sh/u/${entry.mapperName}`}
+            target="_blank"
+            onclick={() => logEvent('open_mapper_page', { beatmapId: entry.beatmapId })}><b>{entry.mapperName}</b></a>
         </p>
       </div>
       <div class="download-links">
-        <a href={downloadURL} target="_blank">Download</a>
+        <a href={downloadURL} target="_blank" onclick={() => logEvent('click_download', { beatmapId: entry.beatmapId })}>
+          Download
+        </a>
         &nbsp;|&nbsp;
-        <a href={osuDirectURL} target="_blank">osu!direct</a>
+        <a href={osuDirectURL} target="_blank" onclick={() => logEvent('click_osu_direct', { beatmapId: entry.beatmapId })}>
+          osu!direct
+        </a>
       </div>
     </div>
     <div class="bottom">

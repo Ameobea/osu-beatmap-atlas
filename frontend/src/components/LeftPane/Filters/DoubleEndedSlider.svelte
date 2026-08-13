@@ -33,6 +33,9 @@
   /** Set an id for the slider div element */
   export let id = 'ccs-' + Math.random().toString(36);
 
+  /** Called when the value is changed by direct user interaction */
+  export let onUserInput: (() => void) | undefined = undefined;
+
   let trackRef: HTMLDivElement | null = null as HTMLDivElement | null;
   let dragging: false | 'left' | 'right' = false;
   let holding: false | 'left' | 'right' = false;
@@ -86,6 +89,7 @@
     }
 
     value[side === 'left' ? 0 : 1] = nextValue;
+    onUserInput?.();
   }
 
   $: labelId = `label-${id}`;
@@ -127,6 +131,7 @@
 
     startHolding(side);
     value[side === 'left' ? 0 : 1] = posVal;
+    onUserInput?.();
   };
 </script>
 

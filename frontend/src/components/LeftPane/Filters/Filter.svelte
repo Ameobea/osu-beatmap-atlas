@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Slider } from 'carbon-components-svelte';
+  import { logEvent } from '../../../api';
   import { genRandomStringID } from '../../../util';
   import DoubleEndedSlider from './DoubleEndedSlider.svelte';
 
@@ -26,6 +27,19 @@
 
   const id = genRandomStringID();
 
+  // Log only user-driven slider input; programmatic range recomputes (mod toggles, corpus
+  // changes) update `value` for every filter at once and must not emit events.
+  let filterChangeLogTimer: number | null = null;
+  const onUserInput = () => {
+    if (filterChangeLogTimer !== null) {
+      clearTimeout(filterChangeLogTimer);
+    }
+    filterChangeLogTimer = window.setTimeout(() => {
+      filterChangeLogTimer = null;
+      logEvent('change_filter', { filter: label, min: value[0], max: value[1] });
+    }, 500);
+  };
+
   const toFixedPrecision = $derived(Math.max(step.toString().split('.')[1]?.length || 0, 1));
 
   const formatValue = (v: number) => {
@@ -51,7 +65,7 @@
 
 <div class="root">
   <label for={id}>{label}</label>
-  <DoubleEndedSlider {id} {min} {max} {step} bind:value />
+  <DoubleEndedSlider {id} {min} {max} {step} bind:value {onUserInput} />
   {#if neverSetThis}
     <Slider />
   {/if}

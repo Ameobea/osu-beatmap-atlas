@@ -114,69 +114,91 @@ export const batchSimulatePlay = async (
 };
 
 const ANALYTICS_SALT = '4rW9XKHcEKa6bolWry8k0LGW';
+const ANALYTICS_PROJECT = 'osu-beatmap-atlas';
 
-export interface AnalyticsEvent {
+interface AnalyticsEvent {
   category: string;
   subcategory: string;
+  payload?: unknown;
 }
 
-const computeAnalyticsVerificationHash = async (events: AnalyticsEvent[]): Promise<string> => {
-  const encoder = new TextEncoder();
-  const hashBuffer = await crypto.subtle.digest(
-    'SHA-256',
-    encoder.encode(events.map((evt) => evt.category + evt.subcategory).join('') + ANALYTICS_SALT)
+const genSessionID = (): string => {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+};
+
+let sessionID: string | null = null;
+const getSessionID = (): string => {
+  if (sessionID) {
+    return sessionID;
+  }
+  try {
+    sessionID = sessionStorage.getItem('analyticsSessionID');
+    if (!sessionID) {
+      sessionID = genSessionID();
+      sessionStorage.setItem('analyticsSessionID', sessionID);
+    }
+  } catch (_err) {
+    sessionID = genSessionID();
+  }
+  return sessionID;
+};
+
+let analyticsQueue: AnalyticsEvent[] = [];
+let analyticsFlushTimer: number | null = null;
+
+const flushAnalyticsEvents = async () => {
+  const events = analyticsQueue;
+  analyticsQueue = [];
+  try {
+    const encoder = new TextEncoder();
+    const digest = await crypto.subtle.digest(
+      'SHA-256',
+      encoder.encode(events.map((evt) => evt.category + evt.subcategory).join('') + ANALYTICS_SALT)
+    );
+    const verification = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+    await fetch(`${PUBLIC_API_BRIDGE_BASE_URL}/a/z`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        events,
+        verification,
+        project: ANALYTICS_PROJECT,
+        session_id: getSessionID(),
+      }),
+      keepalive: true,
+    });
+  } catch (_err) {
+    // analytics must never break the app
+  }
+};
+
+export const logEvent = (subcategory: string, payload?: unknown) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  if (window.location.href.includes('http://localhost')) {
+    console.debug('[analytics]', subcategory, payload);
+    return;
+  }
+
+  analyticsQueue.push(
+    payload === undefined
+      ? { category: 'beatmap_atlas', subcategory }
+      : { category: 'beatmap_atlas', subcategory, payload }
   );
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
-};
-
-export const submitAnalyticsEvent = async (
-  event: AnalyticsEvent,
-  fetch: typeof window.fetch = window.fetch
-): Promise<void> => {
-  const verification = await computeAnalyticsVerificationHash([event]);
-  const body = {
-    event,
-    verification,
-  };
-
-  const response = await fetch(`${PUBLIC_API_BRIDGE_BASE_URL}/a/v`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Failed to submit analytics event:', errorText);
-    throw new Error(`Failed to submit analytics event: ${response.statusText}`);
+  if (analyticsFlushTimer === null) {
+    analyticsFlushTimer = window.setTimeout(() => {
+      analyticsFlushTimer = null;
+      void flushAnalyticsEvents();
+    }, 800);
   }
 };
 
-export const submitBatchAnalyticsEvents = async (
-  events: AnalyticsEvent[],
-  fetch: typeof window.fetch = window.fetch
-): Promise<void> => {
-  const verification = await computeAnalyticsVerificationHash(events);
-  const body = {
-    events,
-    verification,
-  };
-
-  const response = await fetch(`${PUBLIC_API_BRIDGE_BASE_URL}/a/z`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    if (analyticsQueue.length) {
+      void flushAnalyticsEvents();
+    }
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Failed to submit batch analytics events:', errorText);
-    throw new Error(`Failed to submit batch analytics events: ${response.statusText}`);
-  }
-};
+}

@@ -16,11 +16,11 @@
 </script>
 
 <div class="root">
-  <ModFilterIcon bind:selected={state.nomod}>∅</ModFilterIcon>
-  <ModFilterIcon bind:selected={state.DT}>DT</ModFilterIcon>
-  <ModFilterIcon bind:selected={state.HR}>HR</ModFilterIcon>
-  <ModFilterIcon bind:selected={state.EZ}>EZ</ModFilterIcon>
-  <ModFilterIcon bind:selected={state.FL}>FL</ModFilterIcon>
+  <ModFilterIcon bind:selected={state.nomod} mod="nomod">∅</ModFilterIcon>
+  <ModFilterIcon bind:selected={state.DT} mod="DT">DT</ModFilterIcon>
+  <ModFilterIcon bind:selected={state.HR} mod="HR">HR</ModFilterIcon>
+  <ModFilterIcon bind:selected={state.EZ} mod="EZ">EZ</ModFilterIcon>
+  <ModFilterIcon bind:selected={state.FL} mod="FL">FL</ModFilterIcon>
 </div>
 
 <style lang="css">

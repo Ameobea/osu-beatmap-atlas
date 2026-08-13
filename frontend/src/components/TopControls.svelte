@@ -2,7 +2,7 @@
   import { Button, Modal, TextInput } from 'carbon-components-svelte';
   import Info from './Info.svelte';
 
-  import { submitAnalyticsEvent } from '../api';
+  import { logEvent } from '../api';
 
   const { onSubmit }: { onSubmit: (username: string | null) => void } = $props();
 
@@ -15,7 +15,7 @@
   let infoModalOpen = $state(false);
 
   const handleSubmit = () => {
-    setTimeout(() => submitAnalyticsEvent({ category: 'beatmap_atlas', subcategory: 'submit_username_search' }));
+    logEvent('submit_username_search', searchText ? { username: searchText } : { cleared: true });
 
     if (!searchText) {
       localStorage.removeItem('activeUsername');
@@ -53,6 +53,7 @@
       kind="tertiary"
       size="small"
       on:click={() => {
+        logEvent('open_info_modal', { source: 'topbar' });
         infoModalOpen = true;
       }}
       style={`background: black; color: #efefef !important; width: ${infoButtonWidth}px; max-width: ${infoButtonWidth}px; text-align: center; padding-left: 16px; padding-right: 16px;${windowWidth <= 600 ? `position: absolute; left: ${windowWidth - infoButtonWidth - 6}px;` : ''}`}
