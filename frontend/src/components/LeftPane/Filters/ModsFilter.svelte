@@ -21,13 +21,14 @@
   <ModFilterIcon bind:selected={state.HR} mod="HR">HR</ModFilterIcon>
   <ModFilterIcon bind:selected={state.EZ} mod="EZ">EZ</ModFilterIcon>
   <ModFilterIcon bind:selected={state.FL} mod="FL">FL</ModFilterIcon>
+  <ModFilterIcon bind:selected={state.HT} mod="HT">HT</ModFilterIcon>
 </div>
 
 <style lang="css">
   .root {
     display: flex;
     flex-direction: row;
-    gap: 10px;
+    gap: 8px;
     justify-content: center;
     flex: 1;
     padding: 4px 8px;

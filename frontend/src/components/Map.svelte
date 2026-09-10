@@ -55,6 +55,7 @@
       EZ: false,
       FL: false,
       HR: false,
+      HT: false,
     },
   });
 
@@ -67,9 +68,7 @@
       ? (() => {
           try {
             const parsed = JSON.parse(usedSavedFilterState) as FilterState;
-            if (!parsed.mods) {
-              parsed.mods = buildDefaultFilterState().mods;
-            }
+            parsed.mods = { ...buildDefaultFilterState().mods, ...parsed.mods };
             if (parsed.aimSpeedRatio.some((x) => Number.isNaN(x) || x === null || x === undefined)) {
               parsed.aimSpeedRatio = [0.85, 1.6];
             }

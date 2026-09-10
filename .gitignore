@@ -2,3 +2,6 @@
 data
 data/*
 .ipynb_checkpoints
+__pycache__/
+target/
+.vscode/

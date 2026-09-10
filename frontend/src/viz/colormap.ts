@@ -95,18 +95,19 @@ export const turboColormap = (value: number): [number, number, number] => {
   return TurboColormapLUT[index];
 };
 
-const SixCategoryColorMap: [number, number, number][] = [
+const ModsCategoryColorMap: [number, number, number][] = [
   [42 / 255, 132 / 255, 235 / 255],
   [109 / 255, 222 / 255, 194 / 255],
   [224 / 255, 24 / 255, 237 / 255],
   [255 / 255, 60 / 255, 15 / 255],
   [227 / 255, 220 / 255, 18 / 255],
   [44 / 255, 235 / 255, 30 / 255],
+  [235 / 255, 235 / 255, 235 / 255],
   [0, 0, 0],
 ];
 
-export const sixCategoryColorMap = (value: number): [number, number, number] => {
+export const modsCategoryColorMap = (value: number): [number, number, number] => {
   const clampedValue = Math.min(1, Math.max(0, value));
-  const index = Math.floor(clampedValue * (SixCategoryColorMap.length - 1));
-  return SixCategoryColorMap[index];
+  const index = Math.floor(clampedValue * (ModsCategoryColorMap.length - 1));
+  return ModsCategoryColorMap[index];
 };

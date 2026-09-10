@@ -77,7 +77,7 @@ struct BeatmapMetadata {
   beatmap_id: i32,
   // approved: i32,
   approved_date: Option<DateTime<Utc>>,
-  // last_update: String,
+  last_update: DateTime<Utc>,
   total_length: i32,
   // hit_length: i32,
   version: String,
@@ -100,49 +100,56 @@ fn read_beatmap_metadata() -> FxHashMap<i32, BeatmapMetadata> {
     std::fs::File::open(beatmap_metadata_fname).expect("Failed to open beatmap metadata file");
   let beatmap_metadata_reader = SerializedFileReader::new(beatmap_metadata_file).unwrap();
   let parquet_metadata = beatmap_metadata_reader.metadata();
-  assert_eq!(parquet_metadata.num_row_groups(), 1);
-  let beatmap_metadata_row_group = beatmap_metadata_reader.get_row_group(0).unwrap();
   // let schema = parquet_metadata.file_metadata().schema_descr();
   // dbg!(schema);
 
   let mut beatmap_metadata_by_id = FxHashMap::default();
-  for row_res in beatmap_metadata_row_group.get_row_iter(None).unwrap() {
-    let row = row_res.unwrap();
-    // skip the first column which is the id
-    let beatmapset_id = row.get_long(1).unwrap();
-    let beatmap_id = row.get_long(2).unwrap();
-    let approved_date_ts_nanos = row.get_long(4).unwrap_or(0);
-    let approved_date = if approved_date_ts_nanos == 0 {
-      None
-    } else {
-      Some(chrono::DateTime::from_timestamp(approved_date_ts_nanos / 1_000_000_000, 0).unwrap())
-    };
-    let total_length = row.get_long(6).unwrap();
-    let version = row.get_string(8).unwrap().clone();
-    let title = row.get_string(10).unwrap().clone();
-    let creator = row.get_string(11).unwrap().clone();
-    let bpm = row.get_long(12).unwrap();
-    let difficultyrating = row.get_double(14).unwrap();
-    let diff_size = row.get_long(15).unwrap();
-    let diff_overall = row.get_long(16).unwrap();
-    let diff_approach = row.get_long(17).unwrap();
+  for row_group_index in 0..parquet_metadata.num_row_groups() {
+    let row_group = beatmap_metadata_reader
+      .get_row_group(row_group_index)
+      .unwrap();
+    for row_res in row_group.get_row_iter(None).unwrap() {
+      let row = row_res.unwrap();
+      // skip the first column which is the id
+      let beatmapset_id = row.get_long(1).unwrap();
+      let beatmap_id = row.get_long(2).unwrap();
+      let approved_date_ts_nanos = row.get_long(4).unwrap_or(0);
+      let approved_date = if approved_date_ts_nanos == 0 {
+        None
+      } else {
+        Some(chrono::DateTime::from_timestamp(approved_date_ts_nanos / 1_000_000_000, 0).unwrap())
+      };
+      let last_update_ts_nanos = row.get_long(5).unwrap();
+      let last_update =
+        chrono::DateTime::from_timestamp(last_update_ts_nanos / 1_000_000_000, 0).unwrap();
+      let total_length = row.get_long(6).unwrap();
+      let version = row.get_string(8).unwrap().clone();
+      let title = row.get_string(10).unwrap().clone();
+      let creator = row.get_string(11).unwrap().clone();
+      let bpm = row.get_long(12).unwrap();
+      let difficultyrating = row.get_double(14).unwrap();
+      let diff_size = row.get_long(15).unwrap();
+      let diff_overall = row.get_long(16).unwrap();
+      let diff_approach = row.get_long(17).unwrap();
 
-    let beatmap_metadata = BeatmapMetadata {
-      beatmapset_id: beatmapset_id.try_into().unwrap(),
-      beatmap_id: beatmap_id.try_into().unwrap(),
-      approved_date,
-      total_length: total_length.try_into().unwrap(),
-      version,
-      title,
-      creator,
-      bpm: bpm.try_into().unwrap(),
-      difficultyrating: difficultyrating.try_into().unwrap(),
-      diff_size: diff_size.try_into().unwrap(),
-      diff_overall: diff_overall.try_into().unwrap(),
-      diff_approach: diff_approach.try_into().unwrap(),
-    };
+      let beatmap_metadata = BeatmapMetadata {
+        beatmapset_id: beatmapset_id.try_into().unwrap(),
+        beatmap_id: beatmap_id.try_into().unwrap(),
+        approved_date,
+        last_update,
+        total_length: total_length.try_into().unwrap(),
+        version,
+        title,
+        creator,
+        bpm: bpm.try_into().unwrap(),
+        difficultyrating: difficultyrating.try_into().unwrap(),
+        diff_size: diff_size.try_into().unwrap(),
+        diff_overall: diff_overall.try_into().unwrap(),
+        diff_approach: diff_approach.try_into().unwrap(),
+      };
 
-    beatmap_metadata_by_id.insert(beatmap_id.try_into().unwrap(), beatmap_metadata);
+      beatmap_metadata_by_id.insert(beatmap_id.try_into().unwrap(), beatmap_metadata);
+    }
   }
 
   beatmap_metadata_by_id
@@ -170,7 +177,7 @@ pub(crate) async fn build_corpus(score_metadata: Vec<ScoreMetadata>) -> Vec<u8> 
   corpus_buffer.extend_from_slice(&num_items.to_le_bytes());
 
   let difficulties: Vec<DifficultyRecord> = crate::load_difficulties().await;
-  let mut difficulties_by_score_id: FxHashMap<String, DifficultyRecord> = difficulties
+  let difficulties_by_score_id: FxHashMap<String, DifficultyRecord> = difficulties
     .into_iter()
     .map(|dr| (dr.score_id.clone(), dr))
     .collect();
@@ -196,22 +203,9 @@ pub(crate) async fn build_corpus(score_metadata: Vec<ScoreMetadata>) -> Vec<u8> 
       .unwrap_or_else(|| panic!("Failed to find beatmap metadata for beatmap {beatmap_id}"));
     let release_year: u16 = beatmap_metadata
       .approved_date
-      .map(|dt| dt.year() as u16)
-      .unwrap_or(0);
-
-    // TODO: Temp until all difficulties are computed
-    if !difficulties_by_score_id.contains_key(&score_id) {
-      let nil_difficulty_record = DifficultyRecord {
-        difficulty_aim: 0.,
-        difficulty_speed: 0.,
-        difficulty_flashlight: 0.,
-        speed_note_count: 0.,
-        slider_factor: 0.,
-        score_id: score_id.clone(),
-        stars: 0.,
-      };
-      difficulties_by_score_id.insert(score_id.clone(), nil_difficulty_record);
-    }
+      .as_ref()
+      .unwrap_or(&beatmap_metadata.last_update)
+      .year() as u16;
 
     let difficulties = difficulties_by_score_id
       .get(&score_id)

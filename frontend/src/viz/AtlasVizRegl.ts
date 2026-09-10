@@ -57,6 +57,7 @@ export interface FilterState {
     HR: boolean;
     FL: boolean;
     EZ: boolean;
+    HT: boolean;
   };
 }
 
@@ -408,7 +409,7 @@ export class AtlasVizRegl {
         case ColorMode.AimSpeedRatio:
           return this.filterState.aimSpeedRatio;
         case ColorMode.Mods:
-          return [0, 6];
+          return [0, 7];
         case ColorMode.AveragePP:
           return this.filterState.pp;
         case ColorMode.ReleaseYear:
@@ -573,14 +574,16 @@ export class AtlasVizRegl {
       this.filterState.mods.DT ||
       this.filterState.mods.HR ||
       this.filterState.mods.FL ||
-      this.filterState.mods.EZ;
+      this.filterState.mods.EZ ||
+      this.filterState.mods.HT;
     if (needsModsFiltering) {
       if (
         this.filterState.mods.nomod &&
         !this.filterState.mods.DT &&
         !this.filterState.mods.HR &&
         !this.filterState.mods.FL &&
-        !this.filterState.mods.EZ
+        !this.filterState.mods.EZ &&
+        !this.filterState.mods.HT
       ) {
         this.corpus = this.corpus.filter((d) => d.modsBitmask === 0);
       } else {
@@ -598,6 +601,9 @@ export class AtlasVizRegl {
         }
         if (this.filterState.mods.EZ) {
           bitmask |= 2;
+        }
+        if (this.filterState.mods.HT) {
+          bitmask |= 256;
         }
 
         if (exactMatch) {

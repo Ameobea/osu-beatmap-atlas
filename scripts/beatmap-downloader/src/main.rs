@@ -11,9 +11,8 @@ use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
 
 use foundations::telemetry::{log::*, settings::LogVerbosity, TelemetryConfig};
-use rosu_mods::GameMode;
-use rosu_pp::{any::DifficultyAttributes, osu::OsuDifficultyAttributes, Beatmap, Difficulty};
-use rosu_v2::prelude::{GameMod, GameMods};
+use serde::{Deserialize, Serialize};
+use sqlx::{MySql, QueryBuilder};
 
 mod build_corpus;
 
@@ -22,6 +21,17 @@ lazy_static! {
   static ref DB_USER: String = std::env::var("DB_USER").expect("DB_USER must be set");
   static ref DB_PASSWORD: String = std::env::var("DB_PASSWORD").expect("DB_PASSWORD must be set");
   static ref DB_DATABASE: String = std::env::var("DB_DATABASE").expect("DB_DATABASE must be set");
+  static ref DIFFCALC_URL: String = std::env::var("DIFFCALC_URL")
+    .unwrap_or_else(|_| "http://127.0.0.1:4512".to_owned())
+    .trim_end_matches('/')
+    .to_owned();
+  static ref DIFFCALC_API_KEY: String =
+    std::env::var("DIFFCALC_API_KEY").expect("DIFFCALC_API_KEY must be set");
+  static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::builder()
+    .connect_timeout(Duration::from_secs(3))
+    .timeout(Duration::from_secs(60))
+    .build()
+    .expect("Failed to build HTTP client");
 }
 
 static DB_POOL: OnceCell<sqlx::MySqlPool> = OnceCell::new();
@@ -62,6 +72,28 @@ fn parse_score_metadata(file_path: &str) -> Vec<ScoreMetadata> {
     });
   }
   score_metadata
+}
+
+fn filter_score_metadata(
+  score_metadata: Vec<ScoreMetadata>,
+  score_ids_path: &str,
+) -> Vec<ScoreMetadata> {
+  let mut reader = csv::Reader::from_path(score_ids_path).unwrap();
+  let selected_ids: FxHashSet<String> = reader
+    .records()
+    .map(|record| record.unwrap()[0].to_owned())
+    .collect();
+  let selected_count = selected_ids.len();
+  let filtered = score_metadata
+    .into_iter()
+    .filter(|metadata| selected_ids.contains(&metadata.score_id))
+    .collect::<Vec<_>>();
+  assert_eq!(
+    filtered.len(),
+    selected_count,
+    "Some selected score IDs were missing from score metadata"
+  );
+  filtered
 }
 
 // fetched_beatmaps:
@@ -109,7 +141,8 @@ async fn compress_and_insert_beatmap(beatmap_id: i32, raw_beatmap: &[u8]) -> Res
 
   let pool = DB_POOL.get().expect("DB pool not initialized");
   sqlx::query!(
-    "INSERT INTO fetched_beatmaps (beatmap_id, raw_beatmap_gzipped) VALUES (?, ?)",
+    "INSERT INTO fetched_beatmaps (beatmap_id, raw_beatmap_gzipped) VALUES (?, ?) ON DUPLICATE \
+     KEY UPDATE raw_beatmap_gzipped = VALUES(raw_beatmap_gzipped)",
     beatmap_id,
     raw_beatmap_gzipped
   )
@@ -134,6 +167,12 @@ async fn fetch_beatmap(beatmap_id: i32) -> Result<Vec<u8>, String> {
 
   if resp.status().is_success() {
     let raw_beatmap = resp.bytes().await.unwrap();
+    if !raw_beatmap.starts_with(b"osu file format v") {
+      return Err(format!(
+        "Beatmap {beatmap_id} returned invalid content ({} bytes)",
+        raw_beatmap.len()
+      ));
+    }
     Ok(raw_beatmap.to_vec())
   } else {
     let status = resp.status();
@@ -185,6 +224,38 @@ async fn download_all_beatmaps(score_metadata: Vec<ScoreMetadata>) {
 
   let beatmap_ids_to_fetch = get_beatmap_ids_to_fetch(&all_beatmap_ids).await;
 
+  download_beatmap_ids(beatmap_ids_to_fetch).await;
+}
+
+async fn download_all_relevant_beatmaps() {
+  let pool = DB_POOL.get().expect("DB pool not initialized");
+  let beatmap_ids = sqlx::query_scalar::<_, i32>(
+    "SELECT DISTINCT h.beatmap_id FROM hiscore_updates h LEFT JOIN fetched_beatmaps f ON \
+     f.beatmap_id = h.beatmap_id WHERE h.mode = 0 AND h.pp >= 75 AND f.beatmap_id IS NULL",
+  )
+  .fetch_all(pool)
+  .await
+  .expect("Failed to query relevant missing beatmaps");
+
+  download_beatmap_ids(beatmap_ids).await;
+}
+
+async fn refresh_empty_beatmaps() {
+  let pool = DB_POOL.get().expect("DB pool not initialized");
+  // A gzip stream containing no bytes is 20 bytes long. These rows were created
+  // when osu!'s legacy map endpoint returned HTTP 200 with an empty response.
+  let beatmap_ids = sqlx::query_scalar::<_, i32>(
+    "SELECT beatmap_id FROM fetched_beatmaps WHERE OCTET_LENGTH(raw_beatmap_gzipped) <= 20",
+  )
+  .fetch_all(pool)
+  .await
+  .expect("Failed to query empty cached beatmaps");
+
+  info!("Refreshing {} empty cached beatmaps", beatmap_ids.len());
+  download_beatmap_ids(beatmap_ids).await;
+}
+
+async fn download_beatmap_ids(beatmap_ids_to_fetch: Vec<i32>) {
   info!("Need to fetch {} beatmaps", beatmap_ids_to_fetch.len());
 
   let mut success_count = 0usize;
@@ -228,101 +299,172 @@ async fn load_beatmap(beatmap_id: i32) -> Result<Option<Vec<u8>>, String> {
   Ok(Some(decompressed))
 }
 
-async fn get_score_ids_needing_difficulty(all_score_ids: &FxHashSet<String>) -> Vec<String> {
-  let pool = DB_POOL.get().expect("DB pool not initialized");
-  let score_ids: Vec<String> = sqlx::query_scalar("SELECT score_id FROM beatmap_difficulties")
-    .fetch_all(pool)
-    .await
-    .expect("Failed to fetch score IDs");
+const DIFFCALC_BATCH_SIZE: usize = 256;
 
-  let score_ids_set: FxHashSet<String> = score_ids.into_iter().collect();
-  let score_ids_needing_difficulty: Vec<String> = all_score_ids
-    .difference(&score_ids_set)
-    .cloned()
-    .collect::<Vec<_>>();
-  score_ids_needing_difficulty
+#[derive(Serialize)]
+struct DiffcalcBatchRequest {
+  calculations: Vec<DiffcalcCalculationRequest>,
 }
 
-fn compute_difficulty_inner(
-  raw_beatmap: &[u8],
-  mods: GameMods,
-) -> Result<OsuDifficultyAttributes, String> {
-  let calc = Difficulty::new().mods(mods.bits());
-  let map = match Beatmap::from_bytes(raw_beatmap) {
-    Ok(map) => map,
-    Err(err) => {
-      error!("Error parsing beatmap: {err}");
-      return Err(format!("{err}"));
-    },
-  };
-  let DifficultyAttributes::Osu(diff_attrs) = calc.calculate(&map) else {
-    unreachable!("Fond no osu! difficulty attributes");
-  };
-  Ok(diff_attrs)
+#[derive(Serialize)]
+struct DiffcalcCalculationRequest {
+  request_id: String,
+  beatmap_id: i32,
+  mods: Vec<DiffcalcMod>,
+  // The historical embedding corpus is overwhelmingly stable scores and its
+  // normalized score identity does not retain CL separately.
+  is_classic: bool,
 }
 
-async fn store_difficulty(
-  score_id: &str,
-  difficulty: &OsuDifficultyAttributes,
-) -> Result<(), String> {
-  let pool = DB_POOL.get().expect("DB pool not initialized");
-  sqlx::query!(
-    "INSERT INTO beatmap_difficulties (score_id, difficulty_aim, difficulty_speed, \
-     difficulty_flashlight, speed_note_count, slider_factor, stars) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    score_id,
-    difficulty.aim,
-    difficulty.speed,
-    difficulty.flashlight,
-    difficulty.speed_note_count,
-    difficulty.slider_factor,
-    difficulty.stars
-  )
-  .execute(pool)
-  .await
-  .map_err(|err| {
-    error!("Failed to store difficulty for {score_id}: {err}");
-    format!("Failed to store difficulty for {score_id}: {err}")
-  })
-  .map(drop)
+#[derive(Serialize)]
+struct DiffcalcMod {
+  acronym: String,
 }
 
-async fn compute_difficulty(score_id: &str) -> Result<OsuDifficultyAttributes, String> {
+#[derive(Deserialize)]
+struct DiffcalcBatchResponse {
+  algorithm: DiffcalcAlgorithm,
+  results: Vec<DiffcalcCalculationResult>,
+}
+
+#[derive(Deserialize)]
+struct DiffcalcAlgorithm {
+  osu_game_package_version: String,
+  difficulty_version: i32,
+}
+
+#[derive(Deserialize)]
+struct DiffcalcCalculationResult {
+  request_id: Option<String>,
+  difficulty: Option<DiffcalcDifficulty>,
+  error: Option<DiffcalcError>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DiffcalcDifficulty {
+  stars: f64,
+  aim: f64,
+  speed: f64,
+  flashlight: f64,
+  speed_note_count: f64,
+  slider_factor: f64,
+}
+
+#[derive(Deserialize)]
+struct DiffcalcError {
+  code: String,
+  message: String,
+}
+
+fn build_diffcalc_request(score_id: &str) -> Result<DiffcalcCalculationRequest, String> {
   let (beatmap_id, mods_string) = score_id
     .split_once('_')
-    .expect("Failed to split score ID into beatmap ID and mods");
-  let mut game_mods = GameMods::new();
-  let mod_count = mods_string.len() / 2;
-  for i in 0..mod_count {
-    let acronym = &mods_string[i * 2..(i + 1) * 2];
-    let game_mod = GameMod::new(acronym, GameMode::Osu);
-    game_mods.insert(game_mod);
+    .ok_or_else(|| format!("Invalid score ID: {score_id}"))?;
+  if mods_string.len() % 2 != 0 || !mods_string.is_ascii() {
+    return Err(format!("Invalid mod string in score ID: {score_id}"));
+  }
+  let mods = mods_string
+    .as_bytes()
+    .chunks_exact(2)
+    .map(|chunk| DiffcalcMod {
+      acronym: std::str::from_utf8(chunk)
+        .expect("validated ASCII")
+        .to_owned(),
+    })
+    .collect();
+
+  Ok(DiffcalcCalculationRequest {
+    request_id: score_id.to_owned(),
+    beatmap_id: beatmap_id
+      .parse()
+      .map_err(|err| format!("Invalid beatmap ID in {score_id}: {err}"))?,
+    mods,
+    is_classic: true,
+  })
+}
+
+async fn request_difficulties(score_ids: &[String]) -> Result<DiffcalcBatchResponse, String> {
+  let calculations = score_ids
+    .iter()
+    .map(|score_id| build_diffcalc_request(score_id))
+    .collect::<Result<Vec<_>, _>>()?;
+  let response = HTTP_CLIENT
+    .post(format!("{}/v1/calculate", *DIFFCALC_URL))
+    .header("X-Diffcalc-Key", DIFFCALC_API_KEY.as_str())
+    .json(&DiffcalcBatchRequest { calculations })
+    .send()
+    .await
+    .map_err(|err| format!("Diffcalc request failed: {err}"))?;
+  let status = response.status();
+  if !status.is_success() {
+    let body = response.text().await.unwrap_or_default();
+    return Err(format!(
+      "Diffcalc returned {status}: {}",
+      body.chars().take(512).collect::<String>()
+    ));
+  }
+  response
+    .json()
+    .await
+    .map_err(|err| format!("Failed to decode diffcalc response: {err}"))
+}
+
+async fn store_difficulties(difficulties: &[(String, DiffcalcDifficulty)]) -> Result<(), String> {
+  if difficulties.is_empty() {
+    return Ok(());
   }
 
-  let raw_beatmap = match load_beatmap(beatmap_id.parse().unwrap()).await {
-    Ok(Some(raw_beatmap)) => raw_beatmap,
-    Ok(None) => {
-      info!("Missing beatmap {beatmap_id}; downloading and storing...");
+  let pool = DB_POOL.get().expect("DB pool not initialized");
+  let mut query = QueryBuilder::<MySql>::new(
+    "INSERT INTO beatmap_difficulties (score_id, difficulty_aim, difficulty_speed, \
+     difficulty_flashlight, speed_note_count, slider_factor, stars) ",
+  );
+  query.push_values(difficulties, |mut row, (score_id, difficulty)| {
+    row
+      .push_bind(score_id)
+      .push_bind(difficulty.aim)
+      .push_bind(difficulty.speed)
+      .push_bind(difficulty.flashlight)
+      .push_bind(difficulty.speed_note_count)
+      .push_bind(difficulty.slider_factor)
+      .push_bind(difficulty.stars);
+  });
+  query.push(
+    " ON DUPLICATE KEY UPDATE difficulty_aim = VALUES(difficulty_aim), difficulty_speed = \
+     VALUES(difficulty_speed), difficulty_flashlight = VALUES(difficulty_flashlight), \
+     speed_note_count = VALUES(speed_note_count), slider_factor = VALUES(slider_factor), stars = \
+     VALUES(stars)",
+  );
 
-      let raw_beatmap = match fetch_beatmap(beatmap_id.parse().unwrap()).await {
-        Ok(raw_beatmap) => raw_beatmap,
-        Err(err) => {
-          error!("{err}");
-          return Err(err);
-        },
-      };
+  query
+    .build()
+    .execute(pool)
+    .await
+    .map_err(|err| {
+      error!(
+        "Failed to store batch of {} difficulties: {err}",
+        difficulties.len()
+      );
+      format!(
+        "Failed to store batch of {} difficulties: {err}",
+        difficulties.len()
+      )
+    })
+    .map(drop)
+}
 
-      let _ = compress_and_insert_beatmap(beatmap_id.parse().unwrap(), &raw_beatmap).await;
-
-      raw_beatmap
-    },
-    Err(err) => {
-      error!("{err}");
-      return Err(err);
-    },
-  };
-
-  let difficulty = compute_difficulty_inner(&raw_beatmap, game_mods).unwrap();
-  Ok(difficulty)
+async fn compute_difficulty(score_id: &str) -> Result<DiffcalcDifficulty, String> {
+  let mut response = request_difficulties(&[score_id.to_owned()]).await?;
+  let result = response
+    .results
+    .pop()
+    .ok_or_else(|| "Diffcalc returned no result".to_owned())?;
+  if let Some(error) = result.error {
+    return Err(format!("{}: {}", error.code, error.message));
+  }
+  result
+    .difficulty
+    .ok_or_else(|| "Diffcalc omitted difficulty attributes".to_owned())
 }
 
 async fn compute_all_difficulties(score_metadata: Vec<ScoreMetadata>) {
@@ -330,39 +472,105 @@ async fn compute_all_difficulties(score_metadata: Vec<ScoreMetadata>) {
     .iter()
     .map(|metadata| metadata.score_id.clone())
     .collect();
-  let score_ids_needing_difficulty = get_score_ids_needing_difficulty(&all_score_ids).await;
+  let mut score_ids = all_score_ids.into_iter().collect::<Vec<_>>();
+  score_ids.sort_unstable();
 
   info!(
-    "Need to compute difficulties for {} scores",
-    score_ids_needing_difficulty.len()
+    "Recomputing canonical difficulties for {} score identities",
+    score_ids.len()
   );
 
   let mut success_count = 0usize;
   let mut failure_count = 0usize;
+  let mut failed_score_ids = Vec::new();
 
-  for score_id in score_ids_needing_difficulty {
-    let difficulty = match compute_difficulty(&score_id).await {
-      Ok(difficulty) => difficulty,
+  let mut algorithm: Option<(String, i32)> = None;
+  for batch in score_ids.chunks(DIFFCALC_BATCH_SIZE) {
+    let response = match request_difficulties(batch).await {
+      Ok(response) => response,
       Err(err) => {
         error!("{err}");
-        failure_count += 1;
+        failure_count += batch.len();
+        failed_score_ids.extend(batch.iter().cloned());
         continue;
       },
     };
+    algorithm.get_or_insert((
+      response.algorithm.osu_game_package_version,
+      response.algorithm.difficulty_version,
+    ));
+    if response.results.len() != batch.len() {
+      error!(
+        "Diffcalc returned {} results for a batch of {}",
+        response.results.len(),
+        batch.len()
+      );
+      failure_count += batch.len();
+      failed_score_ids.extend(batch.iter().cloned());
+      continue;
+    }
 
-    match store_difficulty(&score_id, &difficulty).await {
-      Ok(_) => {
-        success_count += 1;
-        info!("Stored difficulty for {score_id}");
-      },
+    let mut completed = Vec::with_capacity(batch.len());
+    for result in response.results {
+      let Some(score_id) = result.request_id else {
+        error!("Diffcalc omitted the request ID from a result");
+        failure_count += 1;
+        failed_score_ids.push("unknown".to_owned());
+        continue;
+      };
+      let Some(difficulty) = result.difficulty else {
+        if let Some(error) = result.error {
+          error!(
+            "Diffcalc failed for {score_id}: {}: {}",
+            error.code, error.message
+          );
+        } else {
+          error!("Diffcalc omitted difficulty for {score_id}");
+        }
+        failure_count += 1;
+        failed_score_ids.push(score_id);
+        continue;
+      };
+      completed.push((score_id, difficulty));
+    }
+
+    match store_difficulties(&completed).await {
+      Ok(_) => success_count += completed.len(),
       Err(err) => {
         error!("{err}");
-        failure_count += 1;
+        failure_count += completed.len();
+        failed_score_ids.extend(completed.into_iter().map(|(score_id, _)| score_id));
       },
     }
+    info!("Stored {success_count} canonical difficulties so far");
   }
 
+  if let Some((package, version)) = algorithm {
+    info!("Canonical algorithm: ppy.osu.Game {package}, difficulty version {version}");
+  }
+  let failures_filename = "../../data/difficulty_failures.csv";
+  let mut failures_writer = csv::Writer::from_path(failures_filename)
+    .expect("Failed to create difficulty failure manifest");
+  failures_writer
+    .write_record(["score_id"])
+    .expect("Failed to write difficulty failure manifest header");
+  for score_id in &failed_score_ids {
+    failures_writer
+      .write_record([score_id])
+      .expect("Failed to write difficulty failure manifest row");
+  }
+  failures_writer
+    .flush()
+    .expect("Failed to flush difficulty failure manifest");
+  info!(
+    "Wrote {} failures to {failures_filename}",
+    failed_score_ids.len()
+  );
   info!("Finished computing difficulties: {success_count} successes, {failure_count} failures");
+  assert_eq!(
+    failure_count, 0,
+    "Canonical difficulty refresh was incomplete; refusing to continue with missing results"
+  );
 }
 
 struct DifficultyRecord {
@@ -432,8 +640,17 @@ async fn dump_difficulties() {
 enum Command {
   #[clap(name = "download")]
   DownloadAllBeatmaps,
+  /// Prefetch every uncached map used by a mode=osu, pp>=75 history row directly from the DB.
+  #[clap(name = "download-relevant")]
+  DownloadAllRelevantBeatmaps,
+  /// Replace cached gzip streams which contain an empty beatmap response.
+  #[clap(name = "refresh-empty")]
+  RefreshEmptyBeatmaps,
   #[clap(name = "compute-all")]
   ComputeAllDifficulties,
+  /// Recompute only score identities retained by the final embedding.
+  #[clap(name = "compute-embedding")]
+  ComputeEmbeddingDifficulties,
   #[clap(name = "compute")]
   Compute { score_id: String },
   #[clap(name = "dump-difficulties")]
@@ -463,21 +680,28 @@ async fn main() {
 
   let cli = Cli::parse();
 
-  let score_metadata_filename = "../../data/score_metadata.csv";
-  let score_metadata = parse_score_metadata(score_metadata_filename);
-
   init_db_pool().await;
 
   match cli.command {
-    Command::DownloadAllBeatmaps => download_all_beatmaps(score_metadata).await,
-    Command::ComputeAllDifficulties => compute_all_difficulties(score_metadata).await,
+    Command::DownloadAllBeatmaps =>
+      download_all_beatmaps(parse_score_metadata("../../data/score_metadata.csv")).await,
+    Command::DownloadAllRelevantBeatmaps => download_all_relevant_beatmaps().await,
+    Command::RefreshEmptyBeatmaps => refresh_empty_beatmaps().await,
+    Command::ComputeAllDifficulties =>
+      compute_all_difficulties(parse_score_metadata("../../data/score_metadata.csv")).await,
+    Command::ComputeEmbeddingDifficulties => {
+      let score_metadata = parse_score_metadata("../../data/score_metadata.csv");
+      let selected = filter_score_metadata(score_metadata, "../../data/score_id_mapping.csv");
+      compute_all_difficulties(selected).await;
+    },
     Command::Compute { score_id } => {
       let difficulty = compute_difficulty(&score_id).await.unwrap();
       println!("{difficulty:?}");
     },
     Command::DumpDifficulties => dump_difficulties().await,
     Command::BuildCorpus => {
-      let corpus = build_corpus::build_corpus(score_metadata).await;
+      let corpus =
+        build_corpus::build_corpus(parse_score_metadata("../../data/score_metadata.csv")).await;
       let out_filename = "../../data/corpus";
       tokio::fs::write(out_filename, corpus)
         .await

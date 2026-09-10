@@ -53,6 +53,7 @@ const parseCorpus = (buffer: ArrayBuffer, version: CorpusVersion): ScoreMetadata
     let x = 2 * dataView.getFloat32(rowDataOffset + 8, true);
     let y = 2 * -dataView.getFloat32(rowDataOffset + 12, true);
     switch (version) {
+      case CorpusVersion.Latest:
       case CorpusVersion._2024:
         x *= -1;
         y *= -1;
@@ -87,9 +88,10 @@ const parseCorpus = (buffer: ArrayBuffer, version: CorpusVersion): ScoreMetadata
 
     const modString = parseModsBitmask(modsBitmask);
 
-    const realLengthSeconds = modString.includes('DT') ? Math.ceil(lengthSeconds / 1.5) : lengthSeconds;
+    const rate = modString.includes('DT') ? 1.5 : modString.includes('HT') ? 0.75 : 1;
+    const realLengthSeconds = Math.ceil(lengthSeconds / rate);
     const aimSpeedRatio = aimDifficulty / speedDifficulty;
-    const actualBPM = bpm * (modString.includes('DT') ? 1.5 : 1);
+    const actualBPM = bpm * rate;
 
     beatmaps.push({
       originalIx: i,
@@ -132,16 +134,24 @@ export const GlobalCorpus = writable<FetchedCorpus>({ status: 'notFetched' });
 
 export enum CorpusVersion {
   Latest = 'LATEST',
+  _2025 = '1760230211',
   _2024 = '1736199183',
   First = '1716022133',
 }
 
-export const CorpusVersions = [CorpusVersion.First, CorpusVersion._2024, CorpusVersion.Latest];
+export const CorpusVersions = [
+  CorpusVersion.First,
+  CorpusVersion._2024,
+  CorpusVersion._2025,
+  CorpusVersion.Latest,
+];
 
 export const getCorpusURL = (version: CorpusVersion) => {
   switch (version) {
     case CorpusVersion.Latest:
       return PUBLIC_CORPUS_URL;
+    case CorpusVersion._2025:
+      return 'https://osu-map.b-cdn.net/corpus_1760230211.txt';
     case CorpusVersion._2024:
       return 'https://osu-map.b-cdn.net/corpus_1730166567.txt';
     case CorpusVersion.First:
@@ -162,6 +172,9 @@ export const parseCorpusVersion = (version: number | string | null | undefined):
     case '1736199183':
     case 1736199183:
       return CorpusVersion._2024;
+    case '1760230211':
+    case 1760230211:
+      return CorpusVersion._2025;
     default:
       return CorpusVersion.Latest;
   }
@@ -175,8 +188,10 @@ export const getCorpusDefaultView = (
       return { initialCenter: [14.4, -8], initialSpanX: 81.6 };
     case CorpusVersion._2024:
       return { initialCenter: [-10.4, 5], initialSpanX: 122.6 };
-    case CorpusVersion.Latest:
+    case CorpusVersion._2025:
       return { initialCenter: [-20, 25], initialSpanX: 322.6 };
+    case CorpusVersion.Latest:
+      return { initialCenter: [-20, 0], initialSpanX: 322.6 };
     default:
       throw new Error(`Invalid corpus version: ${version}`);
   }

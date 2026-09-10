@@ -3,7 +3,7 @@
 import type { NumberValue } from 'd3-scale';
 import type { ScoreMetadata } from '../corpus';
 import { UnreachableError } from '../util';
-import { sixCategoryColorMap } from '../viz/colormap';
+import { modsCategoryColorMap } from '../viz/colormap';
 
 export enum ColorMode {
   StarRating,
@@ -51,7 +51,7 @@ export const ColorModeConfigs: { [K in ColorMode]: ColorModeConfig } = {
   },
   [ColorMode.Mods]: {
     explicitMinVal: 0,
-    explicitMaxVal: 6,
+    explicitMaxVal: 7,
     getValue: (d) => {
       const modString = d.modString;
       if (modString.length === 0) {
@@ -75,13 +75,16 @@ export const ColorModeConfigs: { [K in ColorMode]: ColorModeConfig } = {
       if (modString.includes('HR')) {
         return 2;
       }
+      if (modString.includes('HT')) {
+        return 6;
+      }
 
       throw new UnreachableError(`Unhandled mod string: ${modString}`);
     },
     title: 'Mods',
-    colorMapper: sixCategoryColorMap,
-    tickCount: 6,
-    tickValues: [0.5, 1.5, 2.5, 3.5, 4.5, 5.5],
+    colorMapper: modsCategoryColorMap,
+    tickCount: 7,
+    tickValues: [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5],
     tickFormat: (domainValue) => {
       switch (Math.floor(typeof domainValue === 'number' ? domainValue : domainValue.valueOf())) {
         case 0:
@@ -96,6 +99,8 @@ export const ColorModeConfigs: { [K in ColorMode]: ColorModeConfig } = {
           return 'FL';
         case 5:
           return 'EZ';
+        case 6:
+          return 'HT';
         default:
           throw new UnreachableError(`Unhandled domain value: ${domainValue}`);
       }
