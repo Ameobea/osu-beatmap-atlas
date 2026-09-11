@@ -107,6 +107,8 @@ export class AtlasVizRegl {
   private isDestroyed = false;
   private filterState: FilterState;
   private flyToState: FlyToState | null = null;
+  // Survives filter changes so the selection is restored once the map is visible again
+  private selectedDatum: ScoreMetadata | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -543,8 +545,6 @@ export class AtlasVizRegl {
       );
     }
 
-    const oldSelectedScoreIx = get(this.selectedScoreIx);
-    const oldSelected = oldSelectedScoreIx !== null ? this.corpus?.[oldSelectedScoreIx] : null;
     const oldHoveredScoreIx = this.hoveredScoreIx;
     const oldHovered = oldHoveredScoreIx !== null ? this.corpus?.[oldHoveredScoreIx] : null;
     this.corpus = this.sortedFullCorpus.filter((d) => {
@@ -626,7 +626,7 @@ export class AtlasVizRegl {
       this.cachedCorpusPositions[i * 2 + 1] = pos[1];
     }
 
-    const newSelectedScoreIx = this.corpus.findIndex((d) => d === oldSelected);
+    const newSelectedScoreIx = this.selectedDatum ? this.corpus.indexOf(this.selectedDatum) : -1;
     this.selectedScoreIx.set(newSelectedScoreIx === -1 ? null : newSelectedScoreIx);
     const newHoveredScoreIx = this.corpus.findIndex((d) => d === oldHovered);
     this.hoveredScoreIx = newHoveredScoreIx === -1 ? null : newHoveredScoreIx;
@@ -660,7 +660,8 @@ export class AtlasVizRegl {
       return;
     }
     const datum = this.fullCorpus[globalScoreIx];
-    const filteredScoreIx = this.corpus.findIndex((d) => d.originalIx === globalScoreIx);
+    this.selectedDatum = datum;
+    const filteredScoreIx = this.corpus.indexOf(datum);
     if (filteredScoreIx !== -1) {
       this.selectedScoreIx.set(filteredScoreIx);
     }
@@ -890,7 +891,11 @@ export class AtlasVizRegl {
       }
 
       const oldSelectedScoreIx = get(this.selectedScoreIx);
+      if (hit === null) {
+        this.selectedDatum = null;
+      }
       if ((hit === null && oldSelectedScoreIx !== null) || (hit !== null && hit === oldSelectedScoreIx)) {
+        this.selectedDatum = null;
         this.selectedScoreIx.set(null);
         this.updatePointSize(oldSelectedScoreIx);
       } else if (hit !== null && oldSelectedScoreIx !== hit) {
@@ -904,6 +909,7 @@ export class AtlasVizRegl {
           );
         });
 
+        this.selectedDatum = this.corpus?.[hit] ?? null;
         this.selectedScoreIx.set(hit);
         if (oldSelectedScoreIx !== null) {
           this.updatePointSize(oldSelectedScoreIx);

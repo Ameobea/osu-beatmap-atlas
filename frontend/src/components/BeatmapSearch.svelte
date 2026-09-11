@@ -1,11 +1,12 @@
 <script lang="ts">
-  import * as FuzzySearcher from '@m31coding/fuzzy-search';
   import { ComboBox } from 'carbon-components-svelte';
   import CheckmarkFilled from 'carbon-icons-svelte/lib/CheckmarkFilled.svelte';
-  import SearchWorker from './beatmapSearchWorker.worker?worker';
 
-  import { type Corpus } from '../corpus';
-  import type { SearchDatum } from './beatmapSearchWorker.worker';
+  import type { Corpus, ScoreMetadata } from '../corpus';
+  import { buildSearchIndex, search } from './beatmapSearch';
+
+  // Ranks maps the active user has played, and maps near their usual star range, a bit higher
+  const USER_BOOST_ENABLED = true;
 
   const {
     corpus,
@@ -19,47 +20,73 @@
     highlightedScoreIDs: Set<string> | null;
   } = $props();
 
-  const prettyNames = $derived(
-    corpus.map((d) => `${d.beatmapName} [${d.difficultyName}]${d.modString ? ` +${d.modString}` : ''}`)
-  );
-  const indexingData = $derived(
-    corpus.map(
-      (d, i): SearchDatum => ({
-        originalIx: d.originalIx,
-        data: [d.beatmapName, d.difficultyName, d.mapperName, prettyNames[i]],
-      })
-    )
-  );
+  const prettyName = (d: ScoreMetadata) =>
+    `${d.beatmapName} [${d.difficultyName}]${d.modString ? ` +${d.modString}` : ''}`;
 
-  let searcher: FuzzySearcher.DynamicSearcher<SearchDatum, number> | null = null;
-
-  const searchWorker = new SearchWorker();
-  searchWorker.onmessage = (evt) => {
-    const memento = new FuzzySearcher.Memento(evt.data.mementoObjects);
-    const searcherConfig = FuzzySearcher.Config.createDefaultConfig();
-    searcher = FuzzySearcher.SearcherFactory.createSearcher<SearchDatum, number>(searcherConfig);
-    searcher.load(memento);
-  };
-  $effect(() => searchWorker.postMessage(indexingData));
-
-  let searchText = $state('');
-  const searchResults = $derived.by(() => {
-    if (!searchText || !searcher) {
-      return [];
-    }
-    const query = new FuzzySearcher.Query(searchText, 20);
-    return searcher.getMatches(query).matches;
+  const index = $derived(buildSearchIndex(corpus));
+  $effect(() => {
+    const warmup = setTimeout(() => void index, 1000);
+    return () => clearTimeout(warmup);
   });
 
+  const boost = $derived.by(() => {
+    const played = highlightedScoreIDs;
+    if (!USER_BOOST_ENABLED || !played?.size) {
+      return undefined;
+    }
+    const stars = corpus
+      .filter((d) => played.has(d.scoreID))
+      .map((d) => d.starRating)
+      .sort((a, b) => a - b);
+    if (!stars.length) {
+      return undefined;
+    }
+    const lo = stars[Math.floor(stars.length * 0.25)];
+    const hi = stars[Math.floor(stars.length * 0.75)];
+    return (d: ScoreMetadata) => {
+      const starsOutside = d.starRating < lo ? lo - d.starRating : d.starRating > hi ? d.starRating - hi : 0;
+      return (played.has(d.scoreID) ? 1.2 : 1) * (1 + 0.1 * Math.max(0, 1 - starsOutside));
+    };
+  });
+
+  let searchText = $state('');
+  let selectedId = $state<number | undefined>(undefined);
   let open = $state(false);
+
+  const items = $derived(
+    searchText
+      ? search(index, searchText, { limit: 20, boost }).map((ix) => ({ id: ix, text: prettyName(corpus[ix]) }))
+      : []
+  );
+
+  // The combobox only emits `select` when the selection changes, so pressing enter on the
+  // already-selected map re-applies it (flying the atlas back to it) unless the combobox's own
+  // handler picked a different item.
+  const handleKeydown = (evt: KeyboardEvent) => {
+    if (evt.key !== 'Enter' || selectedId === undefined || searchText !== prettyName(corpus[selectedId])) {
+      return;
+    }
+    const prevSelectedId = selectedId;
+    const wasOpen = open;
+    setTimeout(() => {
+      if (selectedId === prevSelectedId) {
+        onSelect(prevSelectedId);
+        if (!wasOpen) {
+          open = false;
+        }
+      }
+    });
+  };
 </script>
 
 <div class="root">
   <ComboBox
     bind:value={searchText}
+    bind:selectedId
     bind:open
-    items={searchResults.map((d) => ({ id: d.entity.originalIx, text: prettyNames[d.entity.originalIx] }))}
+    {items}
     on:select={(e) => onSelect(e.detail.selectedItem.id)}
+    on:keydown={handleKeydown}
     placeholder="Search for a beatmap"
     size="xl"
     let:item
